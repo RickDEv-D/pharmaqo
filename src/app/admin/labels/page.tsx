@@ -201,6 +201,17 @@ export default function AdminLabelsPage() {
     setSelectedField(newField)
   }
 
+  const addNewColorStrip = () => {
+    const newId = `strip-${Date.now()}`
+    const maxOrder = Math.max(...currentTemplate.fields.map(f => f.layerOrder || 0), 0)
+    const newField: LabelField = {
+      id: newId, type: "rect", x: 0, y: 180, width: 800, height: 30,
+      fill: "#8b5cf6", locked: false, opacity: 1, layerOrder: maxOrder + 1, visible: true,
+    }
+    setCurrentTemplate(prev => ({ ...prev, fields: [...prev.fields, newField] }))
+    setSelectedField(newField)
+  }
+
   const deleteField = (fieldId: string) => {
     setCurrentTemplate(prev => ({ ...prev, fields: prev.fields.filter(f => f.id !== fieldId) }))
     if (selectedField?.id === fieldId) setSelectedField(null)
@@ -219,7 +230,7 @@ export default function AdminLabelsPage() {
     if (!isDragging || !selectedField || selectedField.locked) return
     const deltaX = (e.clientX - dragStart.mouseX) / zoom
     const deltaY = (e.clientY - dragStart.mouseY) / zoom
-    if (Math.abs(deltaX) < 2 && Math.abs(deltaY) < 2) return
+    if (Math.abs(deltaX) < 5 && Math.abs(deltaY) < 5) return
     let newX = dragStart.fieldX + deltaX
     let newY = dragStart.fieldY + deltaY
     newX = Math.max(0, Math.min(newX, currentTemplate.width - 20))
@@ -349,32 +360,44 @@ export default function AdminLabelsPage() {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
+    const aspect = currentTemplate.width / currentTemplate.height
     const pageWidth = 595
     const pageHeight = 842
     const margin = 30
-    const labelWidth = pageWidth - margin * 2
-    const labelHeight = labelWidth * (currentTemplate.height / currentTemplate.width)
-    const scaleX = labelWidth / currentTemplate.width
-    const scaleY = labelHeight / currentTemplate.height
+    const availW = pageWidth - margin * 2
+    const availH = pageHeight - margin * 2
+    let labelWidth: number, labelHeight: number
+    if (availW / aspect <= availH) {
+      labelWidth = availW
+      labelHeight = availW / aspect
+    } else {
+      labelHeight = availH
+      labelWidth = availH * aspect
+    }
+    const uniformScale = labelWidth / currentTemplate.width
+    const labelLeft = margin + (availW - labelWidth) / 2
     const labelTop = pageHeight - margin
 
     const page = pdfDoc.addPage([pageWidth, pageHeight])
-    page.drawRectangle({ x: margin, y: labelTop - labelHeight, width: labelWidth, height: labelHeight,
-      color: rgb(0.97, 0.97, 0.97), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
+    const bgC = hexToRgb(currentTemplate.bgColor || "#f8f8f8")
+    page.drawRectangle({ x: labelLeft, y: labelTop - labelHeight, width: labelWidth, height: labelHeight,
+      color: rgb(bgC.r, bgC.g, bgC.b), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
 
     const sortedFields = [...currentTemplate.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0)).filter(f => f.visible !== false)
 
     for (const field of sortedFields) {
-      const fx = margin + field.x * scaleX
-      const fy = labelTop - field.y * scaleY
+      const fx = labelLeft + field.x * uniformScale
+      const fy = labelTop - field.y * uniformScale
 
       if (field.type === "rect") {
         const c = hexToRgb(field.fill || "#1a3a7c")
-        page.drawRectangle({ x: fx, y: fy - (field.height || 40) * scaleY, width: (field.width || 100) * scaleX, height: (field.height || 40) * scaleY,
+        const rW = (field.width || 100) * uniformScale
+        const rH = (field.height || 40) * uniformScale
+        page.drawRectangle({ x: fx, y: fy - rH, width: rW, height: rH,
           color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1 })
       } else if (field.type === "text") {
         const c = hexToRgb(field.fill || "#000000")
-        const fontSize = Math.max(4, (field.fontSize || 14) * scaleX)
+        const fontSize = Math.max(4, (field.fontSize || 14) * uniformScale)
         const useFont = field.fontWeight === "bold" ? boldFont : font
         try {
           page.drawText(field.text || "", { x: fx, y: fy - fontSize, size: fontSize, font: useFont, color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1 })
@@ -387,8 +410,8 @@ export default function AdminLabelsPage() {
           const qrImg = await QRCode.toDataURL(verifyUrl, { width: 300, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
           const qrImageBytes = Uint8Array.from(atob(qrImg.split(",")[1]), (c: string) => c.charCodeAt(0))
           const qrImage = await pdfDoc.embedPng(qrImageBytes)
-          const qrW = (field.width || 150) * scaleX
-          const qrH = (field.height || 150) * scaleY
+          const qrW = (field.width || 150) * uniformScale
+          const qrH = (field.height || 150) * uniformScale
           page.drawImage(qrImage, { x: fx, y: fy - qrH, width: qrW, height: qrH })
         } catch { /* QR failed */ }
       }
@@ -606,6 +629,9 @@ export default function AdminLabelsPage() {
             <button onClick={addNewTextField} className="btn-secondary text-sm flex items-center gap-1" title="Adicionar Texto">
               <Type className="w-4 h-4" /> Novo Texto
             </button>
+            <button onClick={addNewColorStrip} className="btn-secondary text-sm flex items-center gap-1" title="Adicionar Faixa">
+              <Palette className="w-4 h-4" /> Nova Faixa
+            </button>
             <button onClick={() => setShowSaveDialog(true)} className="btn-secondary text-sm flex items-center gap-1">
               <Save className="w-4 h-4" /> Salvar Template
             </button>
@@ -620,9 +646,14 @@ export default function AdminLabelsPage() {
           <div className="w-56 bg-pharma-card rounded-xl border border-pharma-border overflow-y-auto flex-shrink-0">
             <div className="p-3 border-b border-pharma-border flex items-center justify-between">
               <h3 className="font-semibold text-sm flex items-center gap-2"><Layers className="w-4 h-4" /> Camadas</h3>
-              <button onClick={addNewTextField} className="p-1 rounded hover:bg-pharma-purple/20 text-pharma-purple" title="Adicionar Texto">
-                <Plus className="w-4 h-4" />
-              </button>
+              <div className="flex gap-1">
+                <button onClick={addNewTextField} className="p-1 rounded hover:bg-pharma-purple/20 text-pharma-purple" title="Adicionar Texto">
+                  <Type className="w-3 h-3" />
+                </button>
+                <button onClick={addNewColorStrip} className="p-1 rounded hover:bg-pharma-purple/20 text-pharma-purple" title="Adicionar Faixa">
+                  <Palette className="w-3 h-3" />
+                </button>
+              </div>
             </div>
             <div className="p-2 space-y-1">
               {[...currentTemplate.fields].sort((a, b) => (b.layerOrder || 0) - (a.layerOrder || 0)).map(field => (
@@ -711,18 +742,32 @@ export default function AdminLabelsPage() {
                     </div>
                   </div>
                   {(selectedField.type === "rect" || selectedField.type === "qrcode") && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs text-pharma-text-muted block mb-1">Largura</label>
-                        <input type="number" value={selectedField.width || 100} onChange={e => updateField(selectedField.id, { width: parseInt(e.target.value) || 100 })}
-                          className="input-field text-sm" />
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-pharma-text-muted block mb-1">Largura</label>
+                          <input type="number" value={selectedField.width || 100} onChange={e => updateField(selectedField.id, { width: parseInt(e.target.value) || 100 })}
+                            className="input-field text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-pharma-text-muted block mb-1">Altura</label>
+                          <input type="number" value={selectedField.height || 40} onChange={e => updateField(selectedField.id, { height: parseInt(e.target.value) || 40 })}
+                            className="input-field text-sm" />
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-xs text-pharma-text-muted block mb-1">Altura</label>
-                        <input type="number" value={selectedField.height || 40} onChange={e => updateField(selectedField.id, { height: parseInt(e.target.value) || 40 })}
-                          className="input-field text-sm" />
-                      </div>
-                    </div>
+                      {selectedField.type === "rect" && (
+                        <div>
+                          <label className="text-xs text-pharma-text-muted block mb-1">Tipo de Faixa</label>
+                          <div className="grid grid-cols-4 gap-1">
+                            {["#1a3a7c", "#f5c518", "#8b5cf6", "#dc2626", "#059669", "#d97706", "#ec4899", "#000000"].map(c => (
+                              <button key={c} onClick={() => updateField(selectedField.id, { fill: c })}
+                                className={`w-full h-6 rounded border-2 transition-all ${selectedField.fill === c ? "border-white scale-110" : "border-transparent"}`}
+                                style={{ backgroundColor: c }} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                   {selectedField.type === "text" && (
                     <>
