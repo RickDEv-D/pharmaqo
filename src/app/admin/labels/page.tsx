@@ -1,29 +1,104 @@
-'use client'
-import { useState, useEffect, useRef } from 'react'
-import Cookies from 'js-cookie'
-import { Tag, Plus, Download, FileText, X, Printer } from 'lucide-react'
+"use client"
+import { useState, useEffect, useRef, useCallback } from "react"
+import Cookies from "js-cookie"
+import { Tag, Plus, Download, X, Printer, Save, Trash2, Eye, Layers, Type, Palette, Move, Lock, Unlock, Copy, FileText, Image as ImageIcon, ZoomIn, ZoomOut, RotateCcw, Grid3X3 } from "lucide-react"
+import { formatCurrency } from "@/lib/utils"
+
+interface LabelField {
+  id: string
+  type: "text" | "qrcode" | "image" | "rect"
+  text?: string
+  x: number
+  y: number
+  width?: number
+  height?: number
+  fontSize?: number
+  fontFamily?: string
+  fill?: string
+  fontWeight?: string
+  locked?: boolean
+  opacity?: number
+  layerOrder?: number
+  visible?: boolean
+}
+
+interface LabelTemplate {
+  id: string
+  name: string
+  width: number
+  height: number
+  fields: LabelField[]
+  background?: string
+  bgColor?: string
+  stripColor1?: string
+  stripColor2?: string
+}
+
+const DEFAULT_FIELDS: LabelField[] = [
+  { id: "bg-strip-top", type: "rect", x: 0, y: 0, width: 800, height: 40, fill: "#1a3a7c", locked: true, opacity: 1, layerOrder: 1, visible: true },
+  { id: "bg-strip-bottom", type: "rect", x: 0, y: 360, width: 800, height: 40, fill: "#1a3a7c", locked: true, opacity: 1, layerOrder: 2, visible: true },
+  { id: "bg-strip-accent", type: "rect", x: 0, y: 350, width: 800, height: 12, fill: "#f5c518", locked: true, opacity: 1, layerOrder: 3, visible: true },
+  { id: "logo", type: "text", text: "PharmaQo Labs", x: 30, y: 60, fontSize: 28, fontFamily: "Arial", fill: "#1a3a7c", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 10, visible: true },
+  { id: "product-name", type: "text", text: "PRODUTO", x: 30, y: 100, fontSize: 32, fontFamily: "Arial", fill: "#1a1a2e", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 11, visible: true },
+  { id: "dosage", type: "text", text: "100mg/ml", x: 30, y: 140, fontSize: 18, fontFamily: "Arial", fill: "#444", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 12, visible: true },
+  { id: "subtitle", type: "text", text: "Pharmaceutical Grade", x: 30, y: 165, fontSize: 14, fontFamily: "Arial", fill: "#666", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 13, visible: true },
+  { id: "composition", type: "text", text: "Composition: Active Ingredient", x: 30, y: 200, fontSize: 12, fontFamily: "Arial", fill: "#555", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 14, visible: true },
+  { id: "application", type: "text", text: "Intramuscular Use", x: 30, y: 220, fontSize: 12, fontFamily: "Arial", fill: "#555", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 15, visible: true },
+  { id: "lot", type: "text", text: "Lot: PQ-2024-001", x: 30, y: 260, fontSize: 11, fontFamily: "Arial", fill: "#777", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 16, visible: true },
+  { id: "expiry", type: "text", text: "Exp: 12/2026", x: 30, y: 280, fontSize: 11, fontFamily: "Arial", fill: "#777", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 17, visible: true },
+  { id: "uid", type: "text", text: "UID: PQ-XXXX-XXXX", x: 30, y: 310, fontSize: 10, fontFamily: "Arial", fill: "#1a3a7c", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 18, visible: true },
+  { id: "auth-code", type: "text", text: "Auth: XXXX-XXXX-XXXX", x: 30, y: 330, fontSize: 9, fontFamily: "Arial", fill: "#999", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 19, visible: true },
+  { id: "qrcode", type: "qrcode", text: "QR", x: 620, y: 120, width: 150, height: 150, fill: "#1a3a7c", locked: false, opacity: 1, layerOrder: 20, visible: true },
+  { id: "qr-label", type: "text", text: "Scan to verify", x: 640, y: 285, fontSize: 10, fontFamily: "Arial", fill: "#888", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 21, visible: true },
+]
 
 export default function AdminLabelsPage() {
   const [products, setProducts] = useState<any[]>([])
   const [labels, setLabels] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [showEditor, setShowEditor] = useState(false)
   const [showGenerator, setShowGenerator] = useState(false)
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [generating, setGenerating] = useState(false)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [templates, setTemplates] = useState<LabelTemplate[]>([])
+  const [currentTemplate, setCurrentTemplate] = useState<LabelTemplate>({
+    id: "default",
+    name: "PharmaQo Default",
+    width: 800,
+    height: 400,
+    fields: [...DEFAULT_FIELDS],
+    bgColor: "#f8f8f8",
+    stripColor1: "#1a3a7c",
+    stripColor2: "#f5c518",
+  })
+  const [selectedField, setSelectedField] = useState<LabelField | null>(null)
+  const [editingProduct, setEditingProduct] = useState<any>(null)
+  const [zoom, setZoom] = useState(1)
+  const [showGrid, setShowGrid] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [templateName, setTemplateName] = useState("")
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [massExporting, setMassExporting] = useState(false)
+  const canvasRef = useRef<HTMLDivElement>(null)
 
-  const token = Cookies.get('token')
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const token = Cookies.get("token")
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/products?limit=100', { headers }).then(r => r.json()),
-      fetch('/api/labels', { headers }).then(r => r.json()),
+      fetch("/api/products?limit=100", { headers }).then(r => r.json()),
+      fetch("/api/labels", { headers }).then(r => r.json()),
     ]).then(([prodData, labelData]) => {
       setProducts(prodData.products || [])
       setLabels(labelData.labels || [])
       setLoading(false)
     }).catch(() => setLoading(false))
+
+    const saved = localStorage.getItem("pharmaqo-label-templates")
+    if (saved) {
+      try { setTemplates(JSON.parse(saved)) } catch { /* ignore */ }
+    }
   }, [])
 
   const toggleProduct = (id: string) => {
@@ -33,34 +108,208 @@ export default function AdminLabelsPage() {
   const generateLabels = async () => {
     setGenerating(true)
     const selected = products.filter(p => selectedProducts.includes(p.id))
-
     for (const product of selected) {
-      await fetch('/api/labels', {
-        method: 'POST', headers,
+      await fetch("/api/labels", {
+        method: "POST", headers,
         body: JSON.stringify({
           productId: product.id,
-          data: {
-            name: product.name,
-            dosage: product.dosage,
-            lot: product.lot,
-            expiry: product.expiry,
-            composition: product.composition,
-            uid: product.uid,
-          },
+          data: { name: product.name, dosage: product.dosage, lot: product.lot, expiry: product.expiry, composition: product.composition, uid: product.uid },
         }),
       })
     }
-
-    const labelData = await fetch('/api/labels', { headers }).then(r => r.json())
+    const labelData = await fetch("/api/labels", { headers }).then(r => r.json())
     setLabels(labelData.labels || [])
     setShowGenerator(false)
     setSelectedProducts([])
     setGenerating(false)
   }
 
+  const updateField = (fieldId: string, updates: Partial<LabelField>) => {
+    setCurrentTemplate(prev => ({
+      ...prev,
+      fields: prev.fields.map(f => f.id === fieldId ? { ...f, ...updates } : f),
+    }))
+    if (selectedField?.id === fieldId) {
+      setSelectedField(prev => prev ? { ...prev, ...updates } : null)
+    }
+  }
+
+  const openEditorForProduct = (product: any) => {
+    setEditingProduct(product)
+    setCurrentTemplate(prev => ({
+      ...prev,
+      fields: prev.fields.map(f => {
+        switch (f.id) {
+          case "product-name": return { ...f, text: product.name?.toUpperCase() || "PRODUTO" }
+          case "dosage": return { ...f, text: product.dosage || "100mg/ml" }
+          case "composition": return { ...f, text: `Composition: ${product.composition || "Active Ingredient"}` }
+          case "lot": return { ...f, text: `Lot: ${product.lot || "PQ-2024-001"}` }
+          case "expiry": return { ...f, text: `Exp: ${product.expiry || "12/2026"}` }
+          case "uid": return { ...f, text: `UID: ${product.uid?.slice(0, 16) || "PQ-XXXX-XXXX"}` }
+          case "auth-code": return { ...f, text: `Auth: ${product.uid?.slice(0, 16) || "XXXX-XXXX-XXXX"}` }
+          default: return f
+        }
+      }),
+    }))
+    setShowEditor(true)
+  }
+
+  const saveTemplate = () => {
+    const name = templateName || currentTemplate.name
+    const newTemplate = { ...currentTemplate, id: `tpl-${Date.now()}`, name }
+    const updated = [...templates.filter(t => t.name !== name), newTemplate]
+    setTemplates(updated)
+    localStorage.setItem("pharmaqo-label-templates", JSON.stringify(updated))
+    setShowSaveDialog(false)
+    setTemplateName("")
+  }
+
+  const loadTemplate = (template: LabelTemplate) => {
+    setCurrentTemplate({ ...template })
+    setSelectedField(null)
+  }
+
+  const deleteTemplate = (id: string) => {
+    const updated = templates.filter(t => t.id !== id)
+    setTemplates(updated)
+    localStorage.setItem("pharmaqo-label-templates", JSON.stringify(updated))
+  }
+
+  const handleCanvasMouseDown = (e: React.MouseEvent, field: LabelField) => {
+    if (field.locked) return
+    e.preventDefault()
+    e.stopPropagation()
+    setSelectedField(field)
+    setIsDragging(true)
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (rect) {
+      setDragOffset({
+        x: e.clientX / zoom - field.x,
+        y: e.clientY / zoom - field.y,
+      })
+    }
+  }
+
+  const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging || !selectedField || selectedField.locked) return
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const newX = Math.max(0, (e.clientX - rect.left) / zoom - dragOffset.x + selectedField.x)
+    const newY = Math.max(0, (e.clientY - rect.top) / zoom - dragOffset.y + selectedField.y)
+    const snappedX = showGrid ? Math.round(newX / 10) * 10 : newX
+    const snappedY = showGrid ? Math.round(newY / 10) * 10 : newY
+    updateField(selectedField.id, { x: snappedX, y: snappedY })
+    setDragOffset({
+      x: (e.clientX - rect.left) / zoom - snappedX,
+      y: (e.clientY - rect.top) / zoom - snappedY,
+    })
+  }, [isDragging, selectedField, zoom, showGrid, dragOffset])
+
+  const handleCanvasMouseUp = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
+  const renderLabelPreview = (template: LabelTemplate, scale: number = 1) => {
+    const w = template.width * scale
+    const h = template.height * scale
+    return (
+      <div style={{ width: w, height: h, position: "relative", backgroundColor: template.bgColor || "#f8f8f8", overflow: "hidden", backgroundImage: `url(/images/label-template.png)`, backgroundSize: "cover", backgroundPosition: "center" }}>
+        {showGrid && scale === zoom && (
+          <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+            {Array.from({ length: Math.ceil(template.width / 20) }, (_, i) => (
+              <line key={`v${i}`} x1={i * 20 * scale} y1={0} x2={i * 20 * scale} y2={h} stroke="rgba(139,92,246,0.1)" strokeWidth={1} />
+            ))}
+            {Array.from({ length: Math.ceil(template.height / 20) }, (_, i) => (
+              <line key={`h${i}`} x1={0} y1={i * 20 * scale} x2={w} y2={i * 20 * scale} stroke="rgba(139,92,246,0.1)" strokeWidth={1} />
+            ))}
+          </svg>
+        )}
+        {[...template.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0)).filter(f => f.visible !== false).map(field => {
+          if (field.type === "rect") {
+            return (
+              <div
+                key={field.id}
+                onClick={(e) => { e.stopPropagation(); setSelectedField(field) }}
+                onMouseDown={(e) => handleCanvasMouseDown(e, field)}
+                style={{
+                  position: "absolute",
+                  left: field.x * scale,
+                  top: field.y * scale,
+                  width: (field.width || 100) * scale,
+                  height: (field.height || 40) * scale,
+                  backgroundColor: field.fill || "#1a3a7c",
+                  opacity: field.opacity ?? 1,
+                  cursor: field.locked ? "default" : "move",
+                  outline: selectedField?.id === field.id ? "2px solid #8b5cf6" : "none",
+                  outlineOffset: "2px",
+                }}
+              />
+            )
+          }
+          if (field.type === "qrcode") {
+            return (
+              <div
+                key={field.id}
+                onClick={(e) => { e.stopPropagation(); setSelectedField(field) }}
+                onMouseDown={(e) => handleCanvasMouseDown(e, field)}
+                style={{
+                  position: "absolute",
+                  left: field.x * scale,
+                  top: field.y * scale,
+                  width: (field.width || 150) * scale,
+                  height: (field.height || 150) * scale,
+                  opacity: field.opacity ?? 1,
+                  cursor: field.locked ? "default" : "move",
+                  outline: selectedField?.id === field.id ? "2px solid #8b5cf6" : "none",
+                  outlineOffset: "2px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: `2px solid ${field.fill || "#1a3a7c"}`,
+                  borderRadius: "8px",
+                  backgroundColor: "white",
+                }}
+              >
+                <div style={{ textAlign: "center" }}>
+                  <Grid3X3 style={{ width: 40 * scale, height: 40 * scale, color: field.fill || "#1a3a7c" }} />
+                  <p style={{ fontSize: 8 * scale, color: "#888", marginTop: 4 }}>QR Code</p>
+                </div>
+              </div>
+            )
+          }
+          return (
+            <div
+              key={field.id}
+              onClick={(e) => { e.stopPropagation(); setSelectedField(field) }}
+              onMouseDown={(e) => handleCanvasMouseDown(e, field)}
+              style={{
+                position: "absolute",
+                left: field.x * scale,
+                top: field.y * scale,
+                fontSize: (field.fontSize || 14) * scale,
+                fontFamily: field.fontFamily || "Arial",
+                color: field.fill || "#000",
+                fontWeight: field.fontWeight || "normal",
+                opacity: field.opacity ?? 1,
+                cursor: field.locked ? "default" : "move",
+                outline: selectedField?.id === field.id ? "2px solid #8b5cf6" : "none",
+                outlineOffset: "2px",
+                padding: `${2 * scale}px`,
+                whiteSpace: "nowrap",
+                userSelect: "none",
+              }}
+            >
+              {field.text}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   const exportPDF = async () => {
-    const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib')
-    const QRCode = (await import('qrcode')).default
+    const { PDFDocument, rgb, StandardFonts } = await import("pdf-lib")
+    const QRCode = (await import("qrcode")).default
 
     const pdfDoc = await PDFDocument.create()
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
@@ -69,86 +318,485 @@ export default function AdminLabelsPage() {
     const labelsData = labels.filter(l => l.product)
 
     for (let i = 0; i < labelsData.length; i += 4) {
-      const page = pdfDoc.addPage([595, 842]) // A4
+      const page = pdfDoc.addPage([595, 842])
       const batch = labelsData.slice(i, i + 4)
 
       for (let j = 0; j < batch.length; j++) {
         const label = batch[j]
-        const data = typeof label.data === 'string' ? JSON.parse(label.data) : label.data
+        const data = typeof label.data === "string" ? JSON.parse(label.data) : label.data
         const x = 50 + (j % 2) * 260
         const y = 750 - Math.floor(j / 2) * 380
 
-        // Label background
-        page.drawRectangle({ x, y: y - 340, width: 240, height: 340, color: rgb(0.05, 0.05, 0.08), borderColor: rgb(0.55, 0.36, 0.96), borderWidth: 1.5 })
+        page.drawRectangle({ x, y: y - 340, width: 240, height: 340, color: rgb(0.96, 0.96, 0.97), borderColor: rgb(0.1, 0.23, 0.49), borderWidth: 1.5 })
+        page.drawRectangle({ x, y: y - 20, width: 240, height: 20, color: rgb(0.1, 0.23, 0.49) })
+        page.drawRectangle({ x, y: y - 340, width: 240, height: 20, color: rgb(0.1, 0.23, 0.49) })
+        page.drawRectangle({ x, y: y - 318, width: 240, height: 6, color: rgb(0.96, 0.77, 0.09) })
 
-        // Title
-        page.drawText('PharmaQo Labs', { x: x + 20, y: y - 30, size: 14, font: boldFont, color: rgb(0.55, 0.36, 0.96) })
-        page.drawText(data.name || label.product.name, { x: x + 20, y: y - 55, size: 11, font: boldFont, color: rgb(0.9, 0.9, 0.95) })
+        page.drawText("PharmaQo Labs", { x: x + 15, y: y - 50, size: 14, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
+        page.drawText(data.name || label.product.name, { x: x + 15, y: y - 75, size: 12, font: boldFont, color: rgb(0.1, 0.1, 0.15) })
 
-        if (data.dosage) page.drawText(`Dosagem: ${data.dosage}`, { x: x + 20, y: y - 80, size: 8, font, color: rgb(0.6, 0.6, 0.7) })
-        if (data.lot) page.drawText(`Lote: ${data.lot}`, { x: x + 20, y: y - 100, size: 8, font, color: rgb(0.6, 0.6, 0.7) })
-        if (data.expiry) page.drawText(`Validade: ${data.expiry}`, { x: x + 20, y: y - 120, size: 8, font, color: rgb(0.6, 0.6, 0.7) })
+        if (data.dosage) page.drawText(`Dosage: ${data.dosage}`, { x: x + 15, y: y - 100, size: 9, font, color: rgb(0.3, 0.3, 0.4) })
+        if (data.lot) page.drawText(`Lot: ${data.lot}`, { x: x + 15, y: y - 120, size: 8, font, color: rgb(0.4, 0.4, 0.5) })
+        if (data.expiry) page.drawText(`Exp: ${data.expiry}`, { x: x + 15, y: y - 138, size: 8, font, color: rgb(0.4, 0.4, 0.5) })
         if (data.composition) {
-          const comp = data.composition.length > 40 ? data.composition.slice(0, 40) + '...' : data.composition
-          page.drawText(`Comp: ${comp}`, { x: x + 20, y: y - 140, size: 7, font, color: rgb(0.5, 0.5, 0.6) })
+          const comp = data.composition.length > 35 ? data.composition.slice(0, 35) + "..." : data.composition
+          page.drawText(`Comp: ${comp}`, { x: x + 15, y: y - 156, size: 7, font, color: rgb(0.4, 0.4, 0.5) })
         }
 
-        // UID
         const uid = data.uid || label.product.uid
-        page.drawText(`UID: ${uid}`, { x: x + 20, y: y - 170, size: 7, font, color: rgb(0.55, 0.36, 0.96) })
+        page.drawText(`UID: ${uid.slice(0, 20)}`, { x: x + 15, y: y - 260, size: 7, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
 
-        // QR Code
         try {
-          const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/verify?code=${uid}`
-          const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: '#8b5cf6', light: '#0a0a0f' } })
-          const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(',')[1]), c => c.charCodeAt(0))
+          const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify?code=${uid}`
+          const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+          const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
           const qrImage = await pdfDoc.embedPng(qrImageBytes)
-          page.drawImage(qrImage, { x: x + 130, y: y - 320, width: 90, height: 90 })
+          page.drawImage(qrImage, { x: x + 140, y: y - 250, width: 80, height: 80 })
         } catch { /* QR generation failed */ }
 
-        page.drawText('Escaneie para verificar', { x: x + 20, y: y - 320, size: 6, font, color: rgb(0.4, 0.4, 0.5) })
-        page.drawText('autenticidade', { x: x + 20, y: y - 330, size: 6, font, color: rgb(0.4, 0.4, 0.5) })
+        page.drawText("Scan to verify", { x: x + 15, y: y - 280, size: 6, font, color: rgb(0.5, 0.5, 0.6) })
+        page.drawText("authenticity", { x: x + 15, y: y - 290, size: 6, font, color: rgb(0.5, 0.5, 0.6) })
       }
     }
 
     const pdfBytes = await pdfDoc.save()
-    const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' })
+    const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
+    const a = document.createElement("a")
     a.href = url
     a.download = `etiquetas-pharmaqo-${Date.now()}.pdf`
     a.click()
     URL.revokeObjectURL(url)
   }
 
+  const massExportPDF = async () => {
+    setMassExporting(true)
+    try {
+      const { PDFDocument, rgb, StandardFonts } = await import("pdf-lib")
+      const QRCode = (await import("qrcode")).default
+
+      const pdfDoc = await PDFDocument.create()
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+      const allProducts = products.filter(p => p.active !== false)
+
+      for (let i = 0; i < allProducts.length; i += 4) {
+        const page = pdfDoc.addPage([595, 842])
+        const batch = allProducts.slice(i, i + 4)
+
+        for (let j = 0; j < batch.length; j++) {
+          const product = batch[j]
+          const x = 50 + (j % 2) * 260
+          const y = 750 - Math.floor(j / 2) * 380
+
+          page.drawRectangle({ x, y: y - 340, width: 240, height: 340, color: rgb(0.96, 0.96, 0.97), borderColor: rgb(0.1, 0.23, 0.49), borderWidth: 1.5 })
+          page.drawRectangle({ x, y: y - 20, width: 240, height: 20, color: rgb(0.1, 0.23, 0.49) })
+          page.drawRectangle({ x, y: y - 340, width: 240, height: 20, color: rgb(0.1, 0.23, 0.49) })
+          page.drawRectangle({ x, y: y - 318, width: 240, height: 6, color: rgb(0.96, 0.77, 0.09) })
+
+          page.drawText("PharmaQo Labs", { x: x + 15, y: y - 50, size: 14, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
+          page.drawText(product.name || "Product", { x: x + 15, y: y - 75, size: 12, font: boldFont, color: rgb(0.1, 0.1, 0.15) })
+          if (product.dosage) page.drawText(`Dosage: ${product.dosage}`, { x: x + 15, y: y - 100, size: 9, font, color: rgb(0.3, 0.3, 0.4) })
+          if (product.lot) page.drawText(`Lot: ${product.lot}`, { x: x + 15, y: y - 120, size: 8, font, color: rgb(0.4, 0.4, 0.5) })
+          if (product.expiry) page.drawText(`Exp: ${product.expiry}`, { x: x + 15, y: y - 138, size: 8, font, color: rgb(0.4, 0.4, 0.5) })
+
+          const uid = product.uid || "N/A"
+          page.drawText(`UID: ${uid.slice(0, 20)}`, { x: x + 15, y: y - 260, size: 7, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
+
+          try {
+            const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify?code=${uid}`
+            const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+            const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
+            const qrImage = await pdfDoc.embedPng(qrImageBytes)
+            page.drawImage(qrImage, { x: x + 140, y: y - 250, width: 80, height: 80 })
+          } catch { /* ignore */ }
+        }
+      }
+
+      const pdfBytes = await pdfDoc.save()
+      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `etiquetas-massa-pharmaqo-${Date.now()}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("Mass export error:", err)
+    }
+    setMassExporting(false)
+  }
+
+  const massExportZIP = async () => {
+    setMassExporting(true)
+    try {
+      const JSZip = (await import("jszip")).default
+      const { PDFDocument, rgb, StandardFonts } = await import("pdf-lib")
+      const QRCode = (await import("qrcode")).default
+      const zip = new JSZip()
+
+      for (const product of products) {
+        const pdfDoc = await PDFDocument.create()
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+        const page = pdfDoc.addPage([300, 200])
+
+        page.drawRectangle({ x: 0, y: 0, width: 300, height: 200, color: rgb(0.96, 0.96, 0.97) })
+        page.drawRectangle({ x: 0, y: 180, width: 300, height: 20, color: rgb(0.1, 0.23, 0.49) })
+        page.drawRectangle({ x: 0, y: 0, width: 300, height: 20, color: rgb(0.1, 0.23, 0.49) })
+        page.drawRectangle({ x: 0, y: 18, width: 300, height: 5, color: rgb(0.96, 0.77, 0.09) })
+
+        page.drawText("PharmaQo Labs", { x: 10, y: 155, size: 10, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
+        page.drawText(product.name || "Product", { x: 10, y: 138, size: 9, font: boldFont, color: rgb(0.1, 0.1, 0.15) })
+        if (product.dosage) page.drawText(product.dosage, { x: 10, y: 122, size: 7, font, color: rgb(0.3, 0.3, 0.4) })
+
+        const uid = product.uid || "N/A"
+        page.drawText(`UID: ${uid.slice(0, 16)}`, { x: 10, y: 35, size: 6, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
+
+        try {
+          const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify?code=${uid}`
+          const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 80, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+          const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
+          const qrImage = await pdfDoc.embedPng(qrImageBytes)
+          page.drawImage(qrImage, { x: 210, y: 50, width: 70, height: 70 })
+        } catch { /* ignore */ }
+
+        const pdfBytes = await pdfDoc.save()
+        const slug = product.slug || product.name?.toLowerCase().replace(/\s+/g, "-") || "label"
+        zip.file(`${slug}.pdf`, pdfBytes)
+      }
+
+      const content = await zip.generateAsync({ type: "blob" })
+      const url = URL.createObjectURL(content)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `etiquetas-pharmaqo-${Date.now()}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("ZIP export error:", err)
+    }
+    setMassExporting(false)
+  }
+
+  if (showEditor) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => { setShowEditor(false); setSelectedField(null) }} className="p-2 rounded-lg hover:bg-pharma-bg">
+              <X className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl font-bold gradient-text">Editor de Etiquetas</h1>
+            {editingProduct && <span className="text-sm text-pharma-text-muted">- {editingProduct.name}</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowGrid(!showGrid)} className={`p-2 rounded-lg transition-colors ${showGrid ? "bg-pharma-purple text-white" : "hover:bg-pharma-bg text-pharma-text-muted"}`} title="Grid">
+              <Grid3X3 className="w-4 h-4" />
+            </button>
+            <button onClick={() => setZoom(Math.max(0.5, zoom - 0.1))} className="p-2 rounded-lg hover:bg-pharma-bg text-pharma-text-muted" title="Zoom Out">
+              <ZoomOut className="w-4 h-4" />
+            </button>
+            <span className="text-xs text-pharma-text-muted w-12 text-center">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom(Math.min(2, zoom + 0.1))} className="p-2 rounded-lg hover:bg-pharma-bg text-pharma-text-muted" title="Zoom In">
+              <ZoomIn className="w-4 h-4" />
+            </button>
+            <button onClick={() => setZoom(1)} className="p-2 rounded-lg hover:bg-pharma-bg text-pharma-text-muted" title="Reset">
+              <RotateCcw className="w-4 h-4" />
+            </button>
+            <button onClick={() => setShowSaveDialog(true)} className="btn-secondary text-sm flex items-center gap-1">
+              <Save className="w-4 h-4" /> Salvar Template
+            </button>
+            <button onClick={exportPDF} className="btn-primary text-sm flex items-center gap-1">
+              <Download className="w-4 h-4" /> Exportar PDF
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-4" style={{ height: "calc(100vh - 180px)" }}>
+          {/* Left Sidebar - Layers */}
+          <div className="w-56 bg-pharma-card rounded-xl border border-pharma-border overflow-y-auto flex-shrink-0">
+            <div className="p-3 border-b border-pharma-border">
+              <h3 className="font-semibold text-sm flex items-center gap-2"><Layers className="w-4 h-4" /> Camadas</h3>
+            </div>
+            <div className="p-2 space-y-1">
+              {[...currentTemplate.fields].sort((a, b) => (b.layerOrder || 0) - (a.layerOrder || 0)).map(field => (
+                <button
+                  key={field.id}
+                  onClick={() => setSelectedField(field)}
+                  className={`w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors ${
+                    selectedField?.id === field.id ? "bg-pharma-purple/20 text-pharma-purple" : "hover:bg-pharma-bg text-pharma-text-muted"
+                  }`}
+                >
+                  {field.locked ? <Lock className="w-3 h-3 flex-shrink-0" /> : <Unlock className="w-3 h-3 flex-shrink-0" />}
+                  <span className="truncate">{field.id}</span>
+                  <button onClick={(e) => { e.stopPropagation(); updateField(field.id, { visible: !field.visible }) }}
+                    className={`ml-auto ${field.visible !== false ? "text-pharma-purple" : "text-pharma-text-muted/30"}`}>
+                    <Eye className="w-3 h-3" />
+                  </button>
+                </button>
+              ))}
+            </div>
+
+            {/* Saved Templates */}
+            {templates.length > 0 && (
+              <>
+                <div className="p-3 border-t border-pharma-border">
+                  <h3 className="font-semibold text-sm">Templates Salvos</h3>
+                </div>
+                <div className="p-2 space-y-1">
+                  {templates.map(tpl => (
+                    <div key={tpl.id} className="flex items-center gap-1">
+                      <button onClick={() => loadTemplate(tpl)} className="flex-1 text-left px-2 py-1.5 rounded-lg text-xs hover:bg-pharma-bg text-pharma-text-muted truncate">
+                        {tpl.name}
+                      </button>
+                      <button onClick={() => deleteTemplate(tpl.id)} className="p-1 text-red-400 hover:bg-red-500/10 rounded">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Center - Canvas */}
+          <div className="flex-1 bg-pharma-bg rounded-xl border border-pharma-border overflow-auto flex items-center justify-center p-8"
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={handleCanvasMouseUp}
+            onClick={() => setSelectedField(null)}
+          >
+            <div ref={canvasRef} className="shadow-2xl rounded-lg overflow-hidden border border-pharma-border" style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}>
+              {renderLabelPreview(currentTemplate, 1)}
+            </div>
+          </div>
+
+          {/* Right Sidebar - Properties */}
+          <div className="w-64 bg-pharma-card rounded-xl border border-pharma-border overflow-y-auto flex-shrink-0">
+            <div className="p-3 border-b border-pharma-border">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Palette className="w-4 h-4" /> {selectedField ? "Propriedades" : "Cores do Template"}
+              </h3>
+            </div>
+            <div className="p-3 space-y-3">
+              {selectedField ? (
+                <>
+                  <div>
+                    <label className="text-xs text-pharma-text-muted block mb-1">ID</label>
+                    <p className="text-sm font-mono">{selectedField.id}</p>
+                  </div>
+                  {selectedField.type === "text" && (
+                    <div>
+                      <label className="text-xs text-pharma-text-muted block mb-1">Texto</label>
+                      <input type="text" value={selectedField.text || ""} onChange={e => updateField(selectedField.id, { text: e.target.value })}
+                        className="input-field text-sm" />
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-pharma-text-muted block mb-1">X</label>
+                      <input type="number" value={Math.round(selectedField.x)} onChange={e => updateField(selectedField.id, { x: parseInt(e.target.value) || 0 })}
+                        className="input-field text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-pharma-text-muted block mb-1">Y</label>
+                      <input type="number" value={Math.round(selectedField.y)} onChange={e => updateField(selectedField.id, { y: parseInt(e.target.value) || 0 })}
+                        className="input-field text-sm" />
+                    </div>
+                  </div>
+                  {(selectedField.type === "rect" || selectedField.type === "qrcode") && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-pharma-text-muted block mb-1">Largura</label>
+                        <input type="number" value={selectedField.width || 100} onChange={e => updateField(selectedField.id, { width: parseInt(e.target.value) || 100 })}
+                          className="input-field text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-pharma-text-muted block mb-1">Altura</label>
+                        <input type="number" value={selectedField.height || 40} onChange={e => updateField(selectedField.id, { height: parseInt(e.target.value) || 40 })}
+                          className="input-field text-sm" />
+                      </div>
+                    </div>
+                  )}
+                  {selectedField.type === "text" && (
+                    <>
+                      <div>
+                        <label className="text-xs text-pharma-text-muted block mb-1">Tamanho Fonte</label>
+                        <input type="number" value={selectedField.fontSize || 14} onChange={e => updateField(selectedField.id, { fontSize: parseInt(e.target.value) || 14 })}
+                          className="input-field text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-pharma-text-muted block mb-1">Fonte</label>
+                        <select value={selectedField.fontFamily || "Arial"} onChange={e => updateField(selectedField.id, { fontFamily: e.target.value })}
+                          className="input-field text-sm">
+                          <option value="Arial">Arial</option>
+                          <option value="Helvetica">Helvetica</option>
+                          <option value="Times New Roman">Times New Roman</option>
+                          <option value="Courier New">Courier New</option>
+                          <option value="Georgia">Georgia</option>
+                          <option value="Verdana">Verdana</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-pharma-text-muted block mb-1">Peso</label>
+                        <select value={selectedField.fontWeight || "normal"} onChange={e => updateField(selectedField.id, { fontWeight: e.target.value })}
+                          className="input-field text-sm">
+                          <option value="normal">Normal</option>
+                          <option value="bold">Bold</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  <div>
+                    <label className="text-xs text-pharma-text-muted block mb-1">Cor</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={selectedField.fill || "#000000"} onChange={e => updateField(selectedField.id, { fill: e.target.value })}
+                        className="w-8 h-8 rounded border border-pharma-border cursor-pointer" />
+                      <input type="text" value={selectedField.fill || "#000000"} onChange={e => updateField(selectedField.id, { fill: e.target.value })}
+                        className="input-field text-sm flex-1" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-pharma-text-muted block mb-1">Opacidade: {Math.round((selectedField.opacity ?? 1) * 100)}%</label>
+                    <input type="range" min="0" max="100" value={Math.round((selectedField.opacity ?? 1) * 100)}
+                      onChange={e => updateField(selectedField.id, { opacity: parseInt(e.target.value) / 100 })}
+                      className="w-full accent-pharma-purple" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => updateField(selectedField.id, { locked: !selectedField.locked })}
+                      className={`flex-1 text-xs py-2 rounded-lg flex items-center justify-center gap-1 ${selectedField.locked ? "bg-red-500/20 text-red-400" : "bg-pharma-bg text-pharma-text-muted hover:text-white"}`}>
+                      {selectedField.locked ? <><Lock className="w-3 h-3" /> Locked</> : <><Unlock className="w-3 h-3" /> Unlocked</>}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-xs text-pharma-text-muted block mb-1">Cor de Fundo</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={currentTemplate.bgColor || "#f8f8f8"} onChange={e => setCurrentTemplate(p => ({ ...p, bgColor: e.target.value }))}
+                        className="w-8 h-8 rounded border border-pharma-border cursor-pointer" />
+                      <input type="text" value={currentTemplate.bgColor || "#f8f8f8"} onChange={e => setCurrentTemplate(p => ({ ...p, bgColor: e.target.value }))}
+                        className="input-field text-sm flex-1" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-pharma-text-muted block mb-1">Faixa Principal</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={currentTemplate.stripColor1 || "#1a3a7c"} onChange={e => {
+                        const color = e.target.value
+                        setCurrentTemplate(p => ({
+                          ...p,
+                          stripColor1: color,
+                          fields: p.fields.map(f =>
+                            (f.id === "bg-strip-top" || f.id === "bg-strip-bottom") ? { ...f, fill: color } : f
+                          ),
+                        }))
+                      }}
+                        className="w-8 h-8 rounded border border-pharma-border cursor-pointer" />
+                      <span className="text-xs text-pharma-text-muted">{currentTemplate.stripColor1}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-pharma-text-muted block mb-1">Faixa Accent</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={currentTemplate.stripColor2 || "#f5c518"} onChange={e => {
+                        const color = e.target.value
+                        setCurrentTemplate(p => ({
+                          ...p,
+                          stripColor2: color,
+                          fields: p.fields.map(f =>
+                            f.id === "bg-strip-accent" ? { ...f, fill: color } : f
+                          ),
+                        }))
+                      }}
+                        className="w-8 h-8 rounded border border-pharma-border cursor-pointer" />
+                      <span className="text-xs text-pharma-text-muted">{currentTemplate.stripColor2}</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-pharma-border pt-3">
+                    <p className="text-xs text-pharma-text-muted mb-2">Selecione um elemento na tela para editar suas propriedades.</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Save Template Dialog */}
+        {showSaveDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="card max-w-sm w-full">
+              <h2 className="text-lg font-bold mb-4">Salvar Template</h2>
+              <input type="text" value={templateName} onChange={e => setTemplateName(e.target.value)}
+                placeholder="Nome do template..." className="input-field mb-4" />
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setShowSaveDialog(false)} className="btn-secondary">Cancelar</button>
+                <button onClick={saveTemplate} className="btn-primary">Salvar</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold gradient-text">Etiquetas</h1>
-        <div className="flex gap-3">
-          <button onClick={() => setShowGenerator(true)} className="btn-primary flex items-center gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => { setEditingProduct(null); setShowEditor(true) }} className="btn-secondary flex items-center gap-2 text-sm">
+            <Palette className="w-4 h-4" /> Editor Visual
+          </button>
+          <button onClick={() => setShowGenerator(true)} className="btn-primary flex items-center gap-2 text-sm">
             <Plus className="w-4 h-4" /> Gerar Etiquetas
           </button>
           {labels.length > 0 && (
-            <button onClick={exportPDF} className="btn-secondary flex items-center gap-2">
+            <button onClick={exportPDF} className="btn-secondary flex items-center gap-2 text-sm">
               <Download className="w-4 h-4" /> Exportar PDF
             </button>
           )}
+          <button onClick={massExportPDF} disabled={massExporting} className="btn-secondary flex items-center gap-2 text-sm">
+            <FileText className="w-4 h-4" /> {massExporting ? "Exportando..." : "PDF em Massa"}
+          </button>
+          <button onClick={massExportZIP} disabled={massExporting} className="btn-secondary flex items-center gap-2 text-sm">
+            <Download className="w-4 h-4" /> {massExporting ? "Exportando..." : "ZIP em Massa"}
+          </button>
         </div>
       </div>
 
+      {/* Quick Edit - Click product to open in editor */}
+      <div className="card">
+        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><Tag className="w-4 h-4 text-pharma-purple" /> Editar Etiqueta por Produto</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {products.map(p => (
+            <button key={p.id} onClick={() => openEditorForProduct(p)}
+              className="text-left p-3 rounded-xl bg-pharma-bg hover:bg-pharma-purple/10 transition-colors border border-pharma-border hover:border-pharma-purple/30">
+              <p className="font-semibold text-sm truncate">{p.name}</p>
+              <p className="text-xs text-pharma-text-muted mt-1">{p.dosage || "Sem dosagem"}</p>
+              <p className="text-xs text-pharma-purple font-mono mt-1">UID: {p.uid?.slice(0, 12)}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Existing Labels */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {labels.map(label => {
-          const data = typeof label.data === 'string' ? JSON.parse(label.data) : label.data
+          const data = typeof label.data === "string" ? JSON.parse(label.data) : label.data
           return (
-            <div key={label.id} className="card glow-border overflow-hidden">
-              <div className="bg-gradient-to-br from-pharma-purple/10 to-pharma-bg p-4">
-                <p className="text-xs text-pharma-purple font-bold mb-1">PharmaQo Labs</p>
+            <div key={label.id} className="card glow-border overflow-hidden cursor-pointer hover:border-pharma-purple/50 transition-colors"
+              onClick={() => label.product && openEditorForProduct(label.product)}>
+              <div className="bg-gradient-to-br from-[#1a3a7c]/10 to-pharma-bg p-4">
+                <p className="text-xs text-[#1a3a7c] font-bold mb-1">PharmaQo Labs</p>
                 <p className="font-semibold text-sm mb-2">{data.name || label.product?.name}</p>
                 {data.dosage && <p className="text-xs text-pharma-text-muted">Dosagem: {data.dosage}</p>}
                 {data.lot && <p className="text-xs text-pharma-text-muted">Lote: {data.lot}</p>}
                 {data.expiry && <p className="text-xs text-pharma-text-muted">Validade: {data.expiry}</p>}
-                <p className="text-xs text-pharma-purple font-mono mt-2">UID: {(data.uid || label.product?.uid || '').slice(0, 16)}</p>
+                <p className="text-xs text-[#1a3a7c] font-mono mt-2">UID: {(data.uid || label.product?.uid || "").slice(0, 16)}</p>
               </div>
             </div>
           )
@@ -173,7 +821,7 @@ export default function AdminLabelsPage() {
             <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
               {products.map(p => (
                 <label key={p.id} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${
-                  selectedProducts.includes(p.id) ? 'bg-pharma-purple/10 border border-pharma-purple/30' : 'bg-pharma-bg hover:bg-pharma-bg/80'
+                  selectedProducts.includes(p.id) ? "bg-pharma-purple/10 border border-pharma-purple/30" : "bg-pharma-bg hover:bg-pharma-bg/80"
                 }`}>
                   <input type="checkbox" checked={selectedProducts.includes(p.id)}
                     onChange={() => toggleProduct(p.id)}
@@ -196,8 +844,6 @@ export default function AdminLabelsPage() {
           </div>
         </div>
       )}
-
-      <canvas ref={canvasRef} className="hidden" />
     </div>
   )
 }

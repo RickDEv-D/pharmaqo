@@ -1,16 +1,43 @@
-'use client'
-import { useState } from 'react'
-import Link from 'next/link'
-import { useAuth } from '@/hooks/useAuth'
-import { useCart } from '@/hooks/useCart'
-import { ShoppingCart, Menu, X, User, LogOut, Shield, MessageCircle, Search } from 'lucide-react'
+"use client"
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { useAuth } from "@/hooks/useAuth"
+import { useCart } from "@/hooks/useCart"
+import { ShoppingCart, Menu, X, User, LogOut, Shield, MessageCircle, Search, Bell } from "lucide-react"
+import Cookies from "js-cookie"
 
 export default function Navbar() {
   const { user, logout } = useAuth()
   const { count } = useCart()
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState("")
+  const [unreadChats, setUnreadChats] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    const token = Cookies.get("token")
+    const checkUnread = async () => {
+      try {
+        const res = await fetch("/api/chat", { headers: { Authorization: `Bearer ${token}` } })
+        const data = await res.json()
+        const rooms = data.chatRooms || []
+        let unread = 0
+        for (const room of rooms) {
+          if (room.messages && room.messages.length > 0) {
+            const lastMsg = room.messages[0]
+            if (lastMsg.sender?.role !== (user.role === "admin" ? "admin" : "customer")) {
+              unread++
+            }
+          }
+        }
+        setUnreadChats(unread)
+      } catch { /* ignore */ }
+    }
+    checkUnread()
+    const interval = setInterval(checkUnread, 10000)
+    return () => clearInterval(interval)
+  }, [user])
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-pharma-bg/80 backdrop-blur-xl border-b border-pharma-border">
@@ -25,7 +52,7 @@ export default function Navbar() {
 
           <div className="hidden md:flex items-center gap-6">
             <Link href="/" className="text-pharma-text-muted hover:text-pharma-purple transition-colors">
-              Início
+              {"In\u00EDcio"}
             </Link>
             <Link href="/products" className="text-pharma-text-muted hover:text-pharma-purple transition-colors">
               Produtos
@@ -34,8 +61,13 @@ export default function Navbar() {
               Verificar QR
             </Link>
             {user && (
-              <Link href="/chat" className="text-pharma-text-muted hover:text-pharma-purple transition-colors">
+              <Link href="/chat" className="text-pharma-text-muted hover:text-pharma-purple transition-colors relative">
                 <MessageCircle className="w-5 h-5" />
+                {unreadChats > 0 && (
+                  <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full text-xs flex items-center justify-center text-white font-bold animate-pulse">
+                    {unreadChats}
+                  </span>
+                )}
               </Link>
             )}
           </div>
@@ -62,7 +94,7 @@ export default function Navbar() {
 
             {user ? (
               <div className="flex items-center gap-2">
-                {user.role === 'admin' && (
+                {user.role === "admin" && (
                   <Link href="/admin" className="btn-ghost text-sm hidden md:flex items-center gap-1">
                     <Shield className="w-4 h-4" /> Admin
                   </Link>
@@ -72,15 +104,16 @@ export default function Navbar() {
                     <div className="w-8 h-8 rounded-full bg-pharma-purple/20 flex items-center justify-center">
                       <User className="w-4 h-4 text-pharma-purple" />
                     </div>
-                    <span className="text-sm hidden md:block">{user.name.split(' ')[0]}</span>
+                    <span className="text-sm hidden md:block">{user.name.split(" ")[0]}</span>
                   </button>
                   <div className="absolute right-0 top-full mt-2 w-48 card opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
                     <Link href="/chat" className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-pharma-bg text-sm">
                       <MessageCircle className="w-4 h-4" /> Mensagens
+                      {unreadChats > 0 && <span className="ml-auto w-5 h-5 bg-red-500 rounded-full text-xs flex items-center justify-center text-white font-bold">{unreadChats}</span>}
                     </Link>
                     <button
                       onClick={logout}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-pharma-bg text-sm text-pharma-danger w-full"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-pharma-bg text-sm text-red-400 w-full"
                     >
                       <LogOut className="w-4 h-4" /> Sair
                     </button>
@@ -127,11 +160,16 @@ export default function Navbar() {
         {menuOpen && (
           <div className="md:hidden py-4 border-t border-pharma-border animate-slide-down">
             <div className="flex flex-col gap-2">
-              <Link href="/" className="px-3 py-2 rounded-lg hover:bg-pharma-card" onClick={() => setMenuOpen(false)}>Início</Link>
+              <Link href="/" className="px-3 py-2 rounded-lg hover:bg-pharma-card" onClick={() => setMenuOpen(false)}>{"In\u00EDcio"}</Link>
               <Link href="/products" className="px-3 py-2 rounded-lg hover:bg-pharma-card" onClick={() => setMenuOpen(false)}>Produtos</Link>
               <Link href="/verify" className="px-3 py-2 rounded-lg hover:bg-pharma-card" onClick={() => setMenuOpen(false)}>Verificar QR</Link>
-              {user && <Link href="/chat" className="px-3 py-2 rounded-lg hover:bg-pharma-card" onClick={() => setMenuOpen(false)}>Mensagens</Link>}
-              {user?.role === 'admin' && <Link href="/admin" className="px-3 py-2 rounded-lg hover:bg-pharma-card text-pharma-purple" onClick={() => setMenuOpen(false)}>Painel Admin</Link>}
+              {user && (
+                <Link href="/chat" className="px-3 py-2 rounded-lg hover:bg-pharma-card flex items-center gap-2" onClick={() => setMenuOpen(false)}>
+                  Mensagens
+                  {unreadChats > 0 && <span className="w-5 h-5 bg-red-500 rounded-full text-xs flex items-center justify-center text-white font-bold">{unreadChats}</span>}
+                </Link>
+              )}
+              {user?.role === "admin" && <Link href="/admin" className="px-3 py-2 rounded-lg hover:bg-pharma-card text-pharma-purple" onClick={() => setMenuOpen(false)}>Painel Admin</Link>}
             </div>
           </div>
         )}
