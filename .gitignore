@@ -1,6 +1,5 @@
 node_modules/
 .next/
-.env
 prisma/dev.db
 *.db
 .DS_Store
