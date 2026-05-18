@@ -291,12 +291,16 @@ export default function AdminLabelsPage() {
     const deltaY = (e.clientY - dragStart.mouseY) / zoom
     if (Math.abs(deltaX) < 5 && Math.abs(deltaY) < 5) return
     if (selectedFields.length > 1) {
+      const primaryField = currentTemplate.fields.find(f => f.id === selectedField.id)
+      if (!primaryField) return
+      const primaryDx = dragStart.fieldX + deltaX - primaryField.x
+      const primaryDy = dragStart.fieldY + deltaY - primaryField.y
       selectedFields.forEach(sf => {
         if (sf.locked) return
-        const origField = currentTemplate.fields.find(f => f.id === sf.id)
-        if (!origField) return
-        let nx = sf.x + deltaX - (dragStart.fieldX - selectedField.x)
-        let ny = sf.y + deltaY - (dragStart.fieldY - selectedField.y)
+        const curField = currentTemplate.fields.find(f => f.id === sf.id)
+        if (!curField) return
+        let nx = curField.x + primaryDx
+        let ny = curField.y + primaryDy
         nx = Math.max(0, Math.min(nx, currentTemplate.width - 20))
         ny = Math.max(0, Math.min(ny, currentTemplate.height - 20))
         if (showGrid) { nx = Math.round(nx / 10) * 10; ny = Math.round(ny / 10) * 10 }
