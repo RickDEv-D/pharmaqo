@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <rect width="400" height="400" fill="#12121a"/>
+  <rect x="140" y="140" width="120" height="120" rx="20" fill="#1e1e2e" stroke="#8b5cf6" stroke-width="2"/>
+  <path d="M185 200 L200 180 L215 200 L230 185 L245 210 L155 210 Z" fill="#8b5cf6" opacity="0.3"/>
+  <circle cx="180" cy="175" r="8" fill="#8b5cf6" opacity="0.5"/>
+  <text x="200" y="290" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="12">PharmaQo Labs</text>
+</svg>

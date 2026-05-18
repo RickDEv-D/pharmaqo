@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  phone     String?
+  role      String   @default("customer")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  addresses    Address[]
+  orders       Order[]
+  chatRooms    ChatRoom[]
+  messages     Message[]
+  affiliate    Affiliate?
+  verifications QRVerification[]
+}
+
+model Address {
+  id        String  @id @default(uuid())
+  userId    String
+  street    String
+  number    String
+  complement String?
+  neighborhood String
+  city      String
+  state     String
+  zipCode   String
+  isDefault Boolean @default(false)
+
+  user   User    @relation(fields: [userId], references: [id])
+  orders Order[]
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  image     String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  products Product[]
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String
+  price       Float
+  comparePrice Float?
+  stock       Int      @default(0)
+  categoryId  String
+  composition String?
+  benefits    String?
+  dosage      String?
+  tags        String   @default("")
+  featured    Boolean  @default(false)
+  active      Boolean  @default(true)
+  uid         String   @unique @default(uuid())
+  lot         String?
+  expiry      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category    Category       @relation(fields: [categoryId], references: [id])
+  images      ProductImage[]
+  orderItems  OrderItem[]
+  labels      Label[]
+  verifications QRVerification[]
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  productId String
+  url       String
+  isPrimary Boolean @default(false)
+  order     Int     @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  userId      String
+  addressId   String?
+  status      String   @default("pending")
+  subtotal    Float
+  freight     Float    @default(0)
+  discount    Float    @default(0)
+  total       Float
+  couponId    String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User        @relation(fields: [userId], references: [id])
+  address   Address?    @relation(fields: [addressId], references: [id])
+  coupon    Coupon?     @relation(fields: [couponId], references: [id])
+  items     OrderItem[]
+  chatRoom  ChatRoom?
+}
+
+model OrderItem {
+  id        String @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  total     Float
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model ChatRoom {
+  id        String   @id @default(uuid())
+  userId    String
+  orderId   String?  @unique
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  order    Order?    @relation(fields: [orderId], references: [id])
+  messages Message[]
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  chatRoomId String
+  senderId   String
+  content    String
+  type       String   @default("text")
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  sender   User     @relation(fields: [senderId], references: [id])
+}
+
+model Label {
+  id         String  @id @default(uuid())
+  productId  String
+  templateId String?
+  data       String
+  createdAt  DateTime @default(now())
+
+  product  Product        @relation(fields: [productId], references: [id])
+  template LabelTemplate? @relation(fields: [templateId], references: [id])
+}
+
+model LabelTemplate {
+  id         String   @id @default(uuid())
+  name       String
+  width      Int      @default(400)
+  height     Int      @default(300)
+  background String?
+  fields     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  labels Label[]
+}
+
+model QRVerification {
+  id          String   @id @default(uuid())
+  productId   String
+  userId      String?
+  ip          String?
+  userAgent   String?
+  location    String?
+  scanCount   Int      @default(1)
+  suspicious  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+  user    User?   @relation(fields: [userId], references: [id])
+}
+
+model Coupon {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  discount     Float
+  type         String   @default("percentage")
+  maxUses      Int?
+  usedCount    Int      @default(0)
+  affiliateId  String?
+  active       Boolean  @default(true)
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  affiliate Affiliate? @relation(fields: [affiliateId], references: [id])
+  orders    Order[]
+}
+
+model Affiliate {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  commission  Float    @default(10)
+  totalSales  Float    @default(0)
+  totalEarned Float    @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id])
+  coupons Coupon[]
+}
+
+model Freight {
+  id     String @id @default(uuid())
+  state  String @unique
+  price  Float
+  days   Int    @default(7)
+}
+
+model Banner {
+  id       String  @id @default(uuid())
+  title    String
+  subtitle String?
+  image    String
+  link     String?
+  active   Boolean @default(true)
+  order    Int     @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Slider {
+  id       String  @id @default(uuid())
+  title    String
+  subtitle String?
+  image    String
+  link     String?
+  active   Boolean @default(true)
+  order    Int     @default(0)
+  createdAt DateTime @default(now())
+}
