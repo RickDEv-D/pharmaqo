@@ -76,10 +76,11 @@ export default function AdminLabelsPage() {
   const [zoom, setZoom] = useState(1)
   const [showGrid, setShowGrid] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, fieldX: 0, fieldY: 0 })
   const [templateName, setTemplateName] = useState("")
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [massExporting, setMassExporting] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState<string>("")
   const canvasRef = useRef<HTMLDivElement>(null)
 
   const token = Cookies.get("token")
@@ -100,6 +101,19 @@ export default function AdminLabelsPage() {
       try { setTemplates(JSON.parse(saved)) } catch { /* ignore */ }
     }
   }, [])
+
+  useEffect(() => {
+    const uidField = currentTemplate.fields.find(f => f.id === "uid")
+    const uid = uidField?.text?.replace("UID: ", "") || "PQ-XXXX-XXXX"
+    import("qrcode").then(mod => {
+      const QRCode = mod.default
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
+      const verifyUrl = `${baseUrl}/verify?code=${uid}`
+      QRCode.toDataURL(verifyUrl, { width: 200, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+        .then((dataUrl: string) => setQrDataUrl(dataUrl))
+        .catch(() => {})
+    }).catch(() => {})
+  }, [currentTemplate.fields])
 
   const toggleProduct = (id: string) => {
     setSelectedProducts(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id])
@@ -175,35 +189,47 @@ export default function AdminLabelsPage() {
     localStorage.setItem("pharmaqo-label-templates", JSON.stringify(updated))
   }
 
+  const addNewTextField = () => {
+    const newId = `text-${Date.now()}`
+    const maxOrder = Math.max(...currentTemplate.fields.map(f => f.layerOrder || 0), 0)
+    const newField: LabelField = {
+      id: newId, type: "text", text: "Novo Texto", x: 100, y: 200,
+      fontSize: 16, fontFamily: "Arial", fill: "#333333", fontWeight: "normal",
+      locked: false, opacity: 1, layerOrder: maxOrder + 1, visible: true,
+    }
+    setCurrentTemplate(prev => ({ ...prev, fields: [...prev.fields, newField] }))
+    setSelectedField(newField)
+  }
+
+  const deleteField = (fieldId: string) => {
+    setCurrentTemplate(prev => ({ ...prev, fields: prev.fields.filter(f => f.id !== fieldId) }))
+    if (selectedField?.id === fieldId) setSelectedField(null)
+  }
+
   const handleCanvasMouseDown = (e: React.MouseEvent, field: LabelField) => {
     if (field.locked) return
     e.preventDefault()
     e.stopPropagation()
     setSelectedField(field)
     setIsDragging(true)
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (rect) {
-      setDragOffset({
-        x: e.clientX / zoom - field.x,
-        y: e.clientY / zoom - field.y,
-      })
-    }
+    setDragStart({ mouseX: e.clientX, mouseY: e.clientY, fieldX: field.x, fieldY: field.y })
   }
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging || !selectedField || selectedField.locked) return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const newX = Math.max(0, (e.clientX - rect.left) / zoom - dragOffset.x + selectedField.x)
-    const newY = Math.max(0, (e.clientY - rect.top) / zoom - dragOffset.y + selectedField.y)
-    const snappedX = showGrid ? Math.round(newX / 10) * 10 : newX
-    const snappedY = showGrid ? Math.round(newY / 10) * 10 : newY
-    updateField(selectedField.id, { x: snappedX, y: snappedY })
-    setDragOffset({
-      x: (e.clientX - rect.left) / zoom - snappedX,
-      y: (e.clientY - rect.top) / zoom - snappedY,
-    })
-  }, [isDragging, selectedField, zoom, showGrid, dragOffset])
+    const deltaX = (e.clientX - dragStart.mouseX) / zoom
+    const deltaY = (e.clientY - dragStart.mouseY) / zoom
+    if (Math.abs(deltaX) < 2 && Math.abs(deltaY) < 2) return
+    let newX = dragStart.fieldX + deltaX
+    let newY = dragStart.fieldY + deltaY
+    newX = Math.max(0, Math.min(newX, currentTemplate.width - 20))
+    newY = Math.max(0, Math.min(newY, currentTemplate.height - 20))
+    if (showGrid) {
+      newX = Math.round(newX / 10) * 10
+      newY = Math.round(newY / 10) * 10
+    }
+    updateField(selectedField.id, { x: Math.round(newX), y: Math.round(newY) })
+  }, [isDragging, selectedField, zoom, showGrid, dragStart, currentTemplate.width, currentTemplate.height])
 
   const handleCanvasMouseUp = useCallback(() => {
     setIsDragging(false)
@@ -214,7 +240,7 @@ export default function AdminLabelsPage() {
     const h = template.height * scale
     return (
       <div style={{ width: w, height: h, position: "relative", backgroundColor: template.bgColor || "#f8f8f8", overflow: "hidden", backgroundImage: `url(/images/label-template.png)`, backgroundSize: "cover", backgroundPosition: "center" }}>
-        {showGrid && scale === zoom && (
+        {showGrid && (
           <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
             {Array.from({ length: Math.ceil(template.width / 20) }, (_, i) => (
               <line key={`v${i}`} x1={i * 20 * scale} y1={0} x2={i * 20 * scale} y2={h} stroke="rgba(139,92,246,0.1)" strokeWidth={1} />
@@ -270,10 +296,14 @@ export default function AdminLabelsPage() {
                   backgroundColor: "white",
                 }}
               >
-                <div style={{ textAlign: "center" }}>
-                  <Grid3X3 style={{ width: 40 * scale, height: 40 * scale, color: field.fill || "#1a3a7c" }} />
-                  <p style={{ fontSize: 8 * scale, color: "#888", marginTop: 4 }}>QR Code</p>
-                </div>
+                {qrDataUrl ? (
+                  <img src={qrDataUrl} alt="QR Code" style={{ width: "100%", height: "100%", objectFit: "contain" }} draggable={false} />
+                ) : (
+                  <div style={{ textAlign: "center" }}>
+                    <Grid3X3 style={{ width: 40 * scale, height: 40 * scale, color: field.fill || "#1a3a7c" }} />
+                    <p style={{ fontSize: 8 * scale, color: "#888", marginTop: 4 }}>QR Code</p>
+                  </div>
+                )}
               </div>
             )
           }
@@ -305,6 +335,74 @@ export default function AdminLabelsPage() {
         })}
       </div>
     )
+  }
+
+  const hexToRgb = (hex: string) => {
+    const clean = hex.replace("#", "")
+    return { r: parseInt(clean.slice(0, 2), 16) / 255, g: parseInt(clean.slice(2, 4), 16) / 255, b: parseInt(clean.slice(4, 6), 16) / 255 }
+  }
+
+  const exportEditorPDF = async () => {
+    const { PDFDocument, rgb, StandardFonts } = await import("pdf-lib")
+    const QRCode = (await import("qrcode")).default
+    const pdfDoc = await PDFDocument.create()
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+    const pageWidth = 595
+    const pageHeight = 842
+    const margin = 30
+    const labelWidth = pageWidth - margin * 2
+    const labelHeight = labelWidth * (currentTemplate.height / currentTemplate.width)
+    const scaleX = labelWidth / currentTemplate.width
+    const scaleY = labelHeight / currentTemplate.height
+    const labelTop = pageHeight - margin
+
+    const page = pdfDoc.addPage([pageWidth, pageHeight])
+    page.drawRectangle({ x: margin, y: labelTop - labelHeight, width: labelWidth, height: labelHeight,
+      color: rgb(0.97, 0.97, 0.97), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
+
+    const sortedFields = [...currentTemplate.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0)).filter(f => f.visible !== false)
+
+    for (const field of sortedFields) {
+      const fx = margin + field.x * scaleX
+      const fy = labelTop - field.y * scaleY
+
+      if (field.type === "rect") {
+        const c = hexToRgb(field.fill || "#1a3a7c")
+        page.drawRectangle({ x: fx, y: fy - (field.height || 40) * scaleY, width: (field.width || 100) * scaleX, height: (field.height || 40) * scaleY,
+          color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1 })
+      } else if (field.type === "text") {
+        const c = hexToRgb(field.fill || "#000000")
+        const fontSize = Math.max(4, (field.fontSize || 14) * scaleX)
+        const useFont = field.fontWeight === "bold" ? boldFont : font
+        try {
+          page.drawText(field.text || "", { x: fx, y: fy - fontSize, size: fontSize, font: useFont, color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1 })
+        } catch { /* skip unsupported chars */ }
+      } else if (field.type === "qrcode") {
+        try {
+          const uidField = currentTemplate.fields.find(f => f.id === "uid")
+          const uid = uidField?.text?.replace("UID: ", "") || "PQ-XXXX-XXXX"
+          const verifyUrl = `${window.location.origin}/verify?code=${uid}`
+          const qrImg = await QRCode.toDataURL(verifyUrl, { width: 300, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+          const qrImageBytes = Uint8Array.from(atob(qrImg.split(",")[1]), (c: string) => c.charCodeAt(0))
+          const qrImage = await pdfDoc.embedPng(qrImageBytes)
+          const qrW = (field.width || 150) * scaleX
+          const qrH = (field.height || 150) * scaleY
+          page.drawImage(qrImage, { x: fx, y: fy - qrH, width: qrW, height: qrH })
+        } catch { /* QR failed */ }
+      }
+    }
+
+    const pdfBytes = await pdfDoc.save()
+    const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    const pName = editingProduct?.name || "etiqueta"
+    a.download = `${pName.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const exportPDF = async () => {
@@ -347,9 +445,9 @@ export default function AdminLabelsPage() {
         page.drawText(`UID: ${uid.slice(0, 20)}`, { x: x + 15, y: y - 260, size: 7, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
 
         try {
-          const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify?code=${uid}`
-          const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
-          const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
+          const verifyUrl = `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/verify?code=${uid}`
+          const qrPngUrl = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+          const qrImageBytes = Uint8Array.from(atob(qrPngUrl.split(",")[1]), c => c.charCodeAt(0))
           const qrImage = await pdfDoc.embedPng(qrImageBytes)
           page.drawImage(qrImage, { x: x + 140, y: y - 250, width: 80, height: 80 })
         } catch { /* QR generation failed */ }
@@ -405,9 +503,9 @@ export default function AdminLabelsPage() {
           page.drawText(`UID: ${uid.slice(0, 20)}`, { x: x + 15, y: y - 260, size: 7, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
 
           try {
-            const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify?code=${uid}`
-            const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
-            const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
+            const verifyUrl = `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/verify?code=${uid}`
+            const qrPngUrl2 = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+            const qrImageBytes = Uint8Array.from(atob(qrPngUrl2.split(",")[1]), c => c.charCodeAt(0))
             const qrImage = await pdfDoc.embedPng(qrImageBytes)
             page.drawImage(qrImage, { x: x + 140, y: y - 250, width: 80, height: 80 })
           } catch { /* ignore */ }
@@ -455,9 +553,9 @@ export default function AdminLabelsPage() {
         page.drawText(`UID: ${uid.slice(0, 16)}`, { x: 10, y: 35, size: 6, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
 
         try {
-          const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify?code=${uid}`
-          const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 80, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
-          const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
+          const verifyUrl = `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/verify?code=${uid}`
+          const qrPngUrl3 = await QRCode.toDataURL(verifyUrl, { width: 80, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+          const qrImageBytes = Uint8Array.from(atob(qrPngUrl3.split(",")[1]), c => c.charCodeAt(0))
           const qrImage = await pdfDoc.embedPng(qrImageBytes)
           page.drawImage(qrImage, { x: 210, y: 50, width: 70, height: 70 })
         } catch { /* ignore */ }
@@ -505,10 +603,13 @@ export default function AdminLabelsPage() {
             <button onClick={() => setZoom(1)} className="p-2 rounded-lg hover:bg-pharma-bg text-pharma-text-muted" title="Reset">
               <RotateCcw className="w-4 h-4" />
             </button>
+            <button onClick={addNewTextField} className="btn-secondary text-sm flex items-center gap-1" title="Adicionar Texto">
+              <Type className="w-4 h-4" /> Novo Texto
+            </button>
             <button onClick={() => setShowSaveDialog(true)} className="btn-secondary text-sm flex items-center gap-1">
               <Save className="w-4 h-4" /> Salvar Template
             </button>
-            <button onClick={exportPDF} className="btn-primary text-sm flex items-center gap-1">
+            <button onClick={exportEditorPDF} className="btn-primary text-sm flex items-center gap-1">
               <Download className="w-4 h-4" /> Exportar PDF
             </button>
           </div>
@@ -517,8 +618,11 @@ export default function AdminLabelsPage() {
         <div className="flex gap-4" style={{ height: "calc(100vh - 180px)" }}>
           {/* Left Sidebar - Layers */}
           <div className="w-56 bg-pharma-card rounded-xl border border-pharma-border overflow-y-auto flex-shrink-0">
-            <div className="p-3 border-b border-pharma-border">
+            <div className="p-3 border-b border-pharma-border flex items-center justify-between">
               <h3 className="font-semibold text-sm flex items-center gap-2"><Layers className="w-4 h-4" /> Camadas</h3>
+              <button onClick={addNewTextField} className="p-1 rounded hover:bg-pharma-purple/20 text-pharma-purple" title="Adicionar Texto">
+                <Plus className="w-4 h-4" />
+              </button>
             </div>
             <div className="p-2 space-y-1">
               {[...currentTemplate.fields].sort((a, b) => (b.layerOrder || 0) - (a.layerOrder || 0)).map(field => (
@@ -670,6 +774,12 @@ export default function AdminLabelsPage() {
                       {selectedField.locked ? <><Lock className="w-3 h-3" /> Locked</> : <><Unlock className="w-3 h-3" /> Unlocked</>}
                     </button>
                   </div>
+                  {!['bg-strip-top', 'bg-strip-bottom', 'bg-strip-accent', 'logo', 'qrcode'].includes(selectedField.id) && (
+                    <button onClick={() => deleteField(selectedField.id)}
+                      className="w-full text-xs py-2 rounded-lg flex items-center justify-center gap-1 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
+                      <Trash2 className="w-3 h-3" /> Remover Elemento
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
