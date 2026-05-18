@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useRef, useCallback } from "react"
 import Cookies from "js-cookie"
-import { Tag, Plus, Download, X, Printer, Save, Trash2, Eye, Layers, Type, Palette, Move, Lock, Unlock, Copy, FileText, Image as ImageIcon, ZoomIn, ZoomOut, RotateCcw, Grid3X3 } from "lucide-react"
+import { Tag, Plus, Download, X, Printer, Save, Trash2, Eye, Layers, Type, Palette, Move, Lock, Unlock, Copy, FileText, Image as ImageIcon, ZoomIn, ZoomOut, RotateCcw, RotateCw, Grid3X3, ChevronUp, ChevronDown, ChevronsUp, ChevronsDown } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 
 interface LabelField {
@@ -20,6 +20,7 @@ interface LabelField {
   opacity?: number
   layerOrder?: number
   visible?: boolean
+  rotation?: number
 }
 
 interface LabelTemplate {
@@ -72,6 +73,7 @@ export default function AdminLabelsPage() {
     stripColor2: "#f5c518",
   })
   const [selectedField, setSelectedField] = useState<LabelField | null>(null)
+  const [selectedFields, setSelectedFields] = useState<LabelField[]>([])
   const [editingProduct, setEditingProduct] = useState<any>(null)
   const [zoom, setZoom] = useState(1)
   const [showGrid, setShowGrid] = useState(false)
@@ -146,6 +148,51 @@ export default function AdminLabelsPage() {
     if (selectedField?.id === fieldId) {
       setSelectedField(prev => prev ? { ...prev, ...updates } : null)
     }
+    setSelectedFields(prev => prev.map(f => f.id === fieldId ? { ...f, ...updates } : f))
+  }
+
+  const updateMultipleFields = (updates: Partial<LabelField>) => {
+    const ids = selectedFields.map(f => f.id)
+    setCurrentTemplate(prev => ({
+      ...prev,
+      fields: prev.fields.map(f => ids.includes(f.id) ? { ...f, ...updates } : f),
+    }))
+    setSelectedFields(prev => prev.map(f => ({ ...f, ...updates })))
+    if (selectedField && ids.includes(selectedField.id)) {
+      setSelectedField(prev => prev ? { ...prev, ...updates } : null)
+    }
+  }
+
+  const moveLayerUp = (fieldId: string) => {
+    const sorted = [...currentTemplate.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0))
+    const idx = sorted.findIndex(f => f.id === fieldId)
+    if (idx < sorted.length - 1) {
+      const curOrder = sorted[idx].layerOrder || 0
+      const nextOrder = sorted[idx + 1].layerOrder || 0
+      updateField(sorted[idx + 1].id, { layerOrder: curOrder })
+      updateField(fieldId, { layerOrder: nextOrder })
+    }
+  }
+
+  const moveLayerDown = (fieldId: string) => {
+    const sorted = [...currentTemplate.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0))
+    const idx = sorted.findIndex(f => f.id === fieldId)
+    if (idx > 0) {
+      const curOrder = sorted[idx].layerOrder || 0
+      const prevOrder = sorted[idx - 1].layerOrder || 0
+      updateField(sorted[idx - 1].id, { layerOrder: curOrder })
+      updateField(fieldId, { layerOrder: prevOrder })
+    }
+  }
+
+  const moveToFront = (fieldId: string) => {
+    const maxOrder = Math.max(...currentTemplate.fields.map(f => f.layerOrder || 0), 0)
+    updateField(fieldId, { layerOrder: maxOrder + 1 })
+  }
+
+  const moveToBack = (fieldId: string) => {
+    const minOrder = Math.min(...currentTemplate.fields.map(f => f.layerOrder || 0), 999)
+    updateField(fieldId, { layerOrder: minOrder - 1 })
   }
 
   const openEditorForProduct = (product: any) => {
@@ -221,7 +268,19 @@ export default function AdminLabelsPage() {
     if (field.locked) return
     e.preventDefault()
     e.stopPropagation()
-    setSelectedField(field)
+    if (e.shiftKey) {
+      setSelectedFields(prev => {
+        const exists = prev.find(f => f.id === field.id)
+        if (exists) return prev.filter(f => f.id !== field.id)
+        return [...prev, field]
+      })
+      setSelectedField(field)
+    } else {
+      if (!selectedFields.find(f => f.id === field.id)) {
+        setSelectedFields([field])
+      }
+      setSelectedField(field)
+    }
     setIsDragging(true)
     setDragStart({ mouseX: e.clientX, mouseY: e.clientY, fieldX: field.x, fieldY: field.y })
   }
@@ -231,16 +290,30 @@ export default function AdminLabelsPage() {
     const deltaX = (e.clientX - dragStart.mouseX) / zoom
     const deltaY = (e.clientY - dragStart.mouseY) / zoom
     if (Math.abs(deltaX) < 5 && Math.abs(deltaY) < 5) return
-    let newX = dragStart.fieldX + deltaX
-    let newY = dragStart.fieldY + deltaY
-    newX = Math.max(0, Math.min(newX, currentTemplate.width - 20))
-    newY = Math.max(0, Math.min(newY, currentTemplate.height - 20))
-    if (showGrid) {
-      newX = Math.round(newX / 10) * 10
-      newY = Math.round(newY / 10) * 10
+    if (selectedFields.length > 1) {
+      selectedFields.forEach(sf => {
+        if (sf.locked) return
+        const origField = currentTemplate.fields.find(f => f.id === sf.id)
+        if (!origField) return
+        let nx = sf.x + deltaX - (dragStart.fieldX - selectedField.x)
+        let ny = sf.y + deltaY - (dragStart.fieldY - selectedField.y)
+        nx = Math.max(0, Math.min(nx, currentTemplate.width - 20))
+        ny = Math.max(0, Math.min(ny, currentTemplate.height - 20))
+        if (showGrid) { nx = Math.round(nx / 10) * 10; ny = Math.round(ny / 10) * 10 }
+        updateField(sf.id, { x: Math.round(nx), y: Math.round(ny) })
+      })
+    } else {
+      let newX = dragStart.fieldX + deltaX
+      let newY = dragStart.fieldY + deltaY
+      newX = Math.max(0, Math.min(newX, currentTemplate.width - 20))
+      newY = Math.max(0, Math.min(newY, currentTemplate.height - 20))
+      if (showGrid) {
+        newX = Math.round(newX / 10) * 10
+        newY = Math.round(newY / 10) * 10
+      }
+      updateField(selectedField.id, { x: Math.round(newX), y: Math.round(newY) })
     }
-    updateField(selectedField.id, { x: Math.round(newX), y: Math.round(newY) })
-  }, [isDragging, selectedField, zoom, showGrid, dragStart, currentTemplate.width, currentTemplate.height])
+  }, [isDragging, selectedField, selectedFields, zoom, showGrid, dragStart, currentTemplate.width, currentTemplate.height])
 
   const handleCanvasMouseUp = useCallback(() => {
     setIsDragging(false)
@@ -262,6 +335,9 @@ export default function AdminLabelsPage() {
           </svg>
         )}
         {[...template.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0)).filter(f => f.visible !== false).map(field => {
+          const isMultiSelected = selectedFields.some(sf => sf.id === field.id)
+          const isSelected = selectedField?.id === field.id || isMultiSelected
+          const rotStyle = field.rotation ? `rotate(${field.rotation}deg)` : undefined
           if (field.type === "rect") {
             return (
               <div
@@ -277,8 +353,10 @@ export default function AdminLabelsPage() {
                   backgroundColor: field.fill || "#1a3a7c",
                   opacity: field.opacity ?? 1,
                   cursor: field.locked ? "default" : "move",
-                  outline: selectedField?.id === field.id ? "2px solid #8b5cf6" : "none",
+                  outline: isSelected ? `2px solid ${isMultiSelected && selectedFields.length > 1 ? "#f59e0b" : "#8b5cf6"}` : "none",
                   outlineOffset: "2px",
+                  transform: rotStyle,
+                  transformOrigin: "center center",
                 }}
               />
             )
@@ -297,7 +375,7 @@ export default function AdminLabelsPage() {
                   height: (field.height || 150) * scale,
                   opacity: field.opacity ?? 1,
                   cursor: field.locked ? "default" : "move",
-                  outline: selectedField?.id === field.id ? "2px solid #8b5cf6" : "none",
+                  outline: isSelected ? `2px solid ${isMultiSelected && selectedFields.length > 1 ? "#f59e0b" : "#8b5cf6"}` : "none",
                   outlineOffset: "2px",
                   display: "flex",
                   alignItems: "center",
@@ -305,6 +383,8 @@ export default function AdminLabelsPage() {
                   border: `2px solid ${field.fill || "#1a3a7c"}`,
                   borderRadius: "8px",
                   backgroundColor: "white",
+                  transform: rotStyle,
+                  transformOrigin: "center center",
                 }}
               >
                 {qrDataUrl ? (
@@ -333,11 +413,13 @@ export default function AdminLabelsPage() {
                 fontWeight: field.fontWeight || "normal",
                 opacity: field.opacity ?? 1,
                 cursor: field.locked ? "default" : "move",
-                outline: selectedField?.id === field.id ? "2px solid #8b5cf6" : "none",
+                outline: isSelected ? `2px solid ${isMultiSelected && selectedFields.length > 1 ? "#f59e0b" : "#8b5cf6"}` : "none",
                 outlineOffset: "2px",
                 padding: `${2 * scale}px`,
                 whiteSpace: "nowrap",
                 userSelect: "none",
+                transform: rotStyle,
+                transformOrigin: "center center",
               }}
             >
               {field.text}
@@ -656,22 +738,47 @@ export default function AdminLabelsPage() {
               </div>
             </div>
             <div className="p-2 space-y-1">
-              {[...currentTemplate.fields].sort((a, b) => (b.layerOrder || 0) - (a.layerOrder || 0)).map(field => (
-                <button
+              {[...currentTemplate.fields].sort((a, b) => (b.layerOrder || 0) - (a.layerOrder || 0)).map(field => {
+                const isInMulti = selectedFields.some(sf => sf.id === field.id)
+                return (
+                <div
                   key={field.id}
-                  onClick={() => setSelectedField(field)}
-                  className={`w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors ${
+                  onClick={(e) => {
+                    if (e.shiftKey) {
+                      setSelectedFields(prev => {
+                        const exists = prev.find(f => f.id === field.id)
+                        if (exists) return prev.filter(f => f.id !== field.id)
+                        return [...prev, field]
+                      })
+                    } else {
+                      setSelectedFields([field])
+                    }
+                    setSelectedField(field)
+                  }}
+                  className={`w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors cursor-pointer ${
+                    isInMulti && selectedFields.length > 1 ? "bg-amber-500/20 text-amber-400" :
                     selectedField?.id === field.id ? "bg-pharma-purple/20 text-pharma-purple" : "hover:bg-pharma-bg text-pharma-text-muted"
                   }`}
                 >
                   {field.locked ? <Lock className="w-3 h-3 flex-shrink-0" /> : <Unlock className="w-3 h-3 flex-shrink-0" />}
-                  <span className="truncate">{field.id}</span>
-                  <button onClick={(e) => { e.stopPropagation(); updateField(field.id, { visible: !field.visible }) }}
-                    className={`ml-auto ${field.visible !== false ? "text-pharma-purple" : "text-pharma-text-muted/30"}`}>
-                    <Eye className="w-3 h-3" />
-                  </button>
-                </button>
-              ))}
+                  <span className="truncate flex-1">{field.id}</span>
+                  <div className="flex items-center gap-0.5 ml-auto">
+                    <button onClick={(e) => { e.stopPropagation(); moveLayerUp(field.id) }}
+                      className="p-0.5 rounded hover:bg-pharma-purple/20 text-pharma-text-muted hover:text-pharma-purple" title="Subir camada">
+                      <ChevronUp className="w-3 h-3" />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); moveLayerDown(field.id) }}
+                      className="p-0.5 rounded hover:bg-pharma-purple/20 text-pharma-text-muted hover:text-pharma-purple" title="Descer camada">
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); updateField(field.id, { visible: !field.visible }) }}
+                      className={`p-0.5 ${field.visible !== false ? "text-pharma-purple" : "text-pharma-text-muted/30"}`}>
+                      <Eye className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+                )
+              })}
             </div>
 
             {/* Saved Templates */}
@@ -701,7 +808,7 @@ export default function AdminLabelsPage() {
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
             onMouseLeave={handleCanvasMouseUp}
-            onClick={() => setSelectedField(null)}
+            onClick={() => { setSelectedField(null); setSelectedFields([]) }}
           >
             <div ref={canvasRef} className="shadow-2xl rounded-lg overflow-hidden border border-pharma-border" style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}>
               {renderLabelPreview(currentTemplate, 1)}
@@ -808,10 +915,46 @@ export default function AdminLabelsPage() {
                     </div>
                   </div>
                   <div>
+                    <label className="text-xs text-pharma-text-muted block mb-1">Rotação: {selectedField.rotation || 0}°</label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min="-180" max="180" value={selectedField.rotation || 0}
+                        onChange={e => updateField(selectedField.id, { rotation: parseInt(e.target.value) })}
+                        className="flex-1 accent-pharma-purple" />
+                      <input type="number" min="-360" max="360" value={selectedField.rotation || 0}
+                        onChange={e => updateField(selectedField.id, { rotation: parseInt(e.target.value) || 0 })}
+                        className="input-field text-sm w-16" />
+                      <button onClick={() => updateField(selectedField.id, { rotation: 0 })}
+                        className="p-1 rounded hover:bg-pharma-bg text-pharma-text-muted" title="Reset rotação">
+                        <RotateCcw className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
                     <label className="text-xs text-pharma-text-muted block mb-1">Opacidade: {Math.round((selectedField.opacity ?? 1) * 100)}%</label>
                     <input type="range" min="0" max="100" value={Math.round((selectedField.opacity ?? 1) * 100)}
                       onChange={e => updateField(selectedField.id, { opacity: parseInt(e.target.value) / 100 })}
                       className="w-full accent-pharma-purple" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-pharma-text-muted block mb-1">Camada</label>
+                    <div className="flex gap-1">
+                      <button onClick={() => moveToBack(selectedField.id)}
+                        className="flex-1 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 bg-pharma-bg text-pharma-text-muted hover:text-white" title="Enviar para trás">
+                        <ChevronsDown className="w-3 h-3" /> Trás
+                      </button>
+                      <button onClick={() => moveLayerDown(selectedField.id)}
+                        className="flex-1 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 bg-pharma-bg text-pharma-text-muted hover:text-white" title="Descer camada">
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => moveLayerUp(selectedField.id)}
+                        className="flex-1 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 bg-pharma-bg text-pharma-text-muted hover:text-white" title="Subir camada">
+                        <ChevronUp className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => moveToFront(selectedField.id)}
+                        className="flex-1 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 bg-pharma-bg text-pharma-text-muted hover:text-white" title="Trazer para frente">
+                        <ChevronsUp className="w-3 h-3" /> Frente
+                      </button>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => updateField(selectedField.id, { locked: !selectedField.locked })}
@@ -819,6 +962,12 @@ export default function AdminLabelsPage() {
                       {selectedField.locked ? <><Lock className="w-3 h-3" /> Locked</> : <><Unlock className="w-3 h-3" /> Unlocked</>}
                     </button>
                   </div>
+                  {selectedFields.length > 1 && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
+                      <p className="text-xs text-amber-400 font-semibold mb-1">{selectedFields.length} elementos selecionados</p>
+                      <p className="text-xs text-pharma-text-muted">Shift+click para adicionar/remover</p>
+                    </div>
+                  )}
                   {!['bg-strip-top', 'bg-strip-bottom', 'bg-strip-accent', 'logo', 'qrcode'].includes(selectedField.id) && (
                     <button onClick={() => deleteField(selectedField.id)}
                       className="w-full text-xs py-2 rounded-lg flex items-center justify-center gap-1 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
