@@ -35,6 +35,17 @@ interface LabelTemplate {
   stripColor2?: string
 }
 
+const generateAuthCode = (productName: string): string => {
+  const abbrev = productName
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase()
+    .slice(0, 7)
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+  let random = ""
+  for (let i = 0; i < 8; i++) random += chars[Math.floor(Math.random() * chars.length)]
+  return `PHQ-${abbrev || "PROD"}-${random}`
+}
+
 const DEFAULT_FIELDS: LabelField[] = [
   { id: "bg-strip-top", type: "rect", x: 0, y: 0, width: 800, height: 40, fill: "#1a3a7c", locked: true, opacity: 1, layerOrder: 1, visible: true },
   { id: "bg-strip-bottom", type: "rect", x: 0, y: 360, width: 800, height: 40, fill: "#1a3a7c", locked: true, opacity: 1, layerOrder: 2, visible: true },
@@ -84,6 +95,9 @@ export default function AdminLabelsPage() {
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [massExporting, setMassExporting] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string>("")
+  const [generatedCodes, setGeneratedCodes] = useState<string[]>([])
+  const [codeCount, setCodeCount] = useState(10)
+  const [showCodesPanel, setShowCodesPanel] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
 
   const token = Cookies.get("token")
@@ -235,6 +249,45 @@ export default function AdminLabelsPage() {
     const updated = templates.filter(t => t.id !== id)
     setTemplates(updated)
     localStorage.setItem("pharmaqo-label-templates", JSON.stringify(updated))
+  }
+
+  const generateAndApplyCode = () => {
+    const productField = currentTemplate.fields.find(f => f.id === "product-name")
+    const productName = productField?.text || "PROD"
+    const code = generateAuthCode(productName)
+    updateField("uid", { text: `UID: ${code}` })
+    updateField("auth-code", { text: `Auth: ${code}` })
+  }
+
+  const generateBulkCodes = (count: number) => {
+    const productField = currentTemplate.fields.find(f => f.id === "product-name")
+    const productName = productField?.text || "PROD"
+    const codes: string[] = []
+    for (let i = 0; i < count; i++) {
+      codes.push(generateAuthCode(productName))
+    }
+    setGeneratedCodes(codes)
+    if (codes.length > 0) {
+      updateField("uid", { text: `UID: ${codes[0]}` })
+      updateField("auth-code", { text: `Auth: ${codes[0]}` })
+    }
+    setShowCodesPanel(true)
+  }
+
+  const exportCodesToCSV = () => {
+    if (generatedCodes.length === 0) return
+    const csv = "Código de Autenticidade\n" + generatedCodes.join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `codigos-autenticidade-${Date.now()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const copyCodeToClipboard = (code: string) => {
+    navigator.clipboard.writeText(code).catch(() => {})
   }
 
   const addNewTextField = () => {
@@ -769,6 +822,9 @@ export default function AdminLabelsPage() {
             <button onClick={addNewColorStrip} className="btn-secondary text-sm flex items-center gap-1" title="Adicionar Faixa">
               <Palette className="w-4 h-4" /> Nova Faixa
             </button>
+            <button onClick={generateAndApplyCode} className="btn-secondary text-sm flex items-center gap-1" title="Gerar código de autenticidade único">
+              <Grid3X3 className="w-4 h-4" /> Gerar Código
+            </button>
             <button onClick={() => setShowSaveDialog(true)} className="btn-secondary text-sm flex items-center gap-1">
               <Save className="w-4 h-4" /> Salvar Template
             </button>
@@ -1081,6 +1137,17 @@ export default function AdminLabelsPage() {
                     </div>
                   </div>
                   <div className="border-t border-pharma-border pt-3">
+                    <label className="text-xs text-pharma-text-muted block mb-2">Códigos de Autenticidade</label>
+                    <div className="space-y-2">
+                      <button onClick={generateAndApplyCode} className="w-full btn-secondary text-xs flex items-center justify-center gap-1">
+                        <Grid3X3 className="w-3 h-3" /> Gerar 1 Código
+                      </button>
+                      <button onClick={() => { generateBulkCodes(codeCount); }} className="w-full btn-primary text-xs flex items-center justify-center gap-1">
+                        <Download className="w-3 h-3" /> Gerar {codeCount} Códigos em Massa
+                      </button>
+                    </div>
+                  </div>
+                  <div className="border-t border-pharma-border pt-3">
                     <p className="text-xs text-pharma-text-muted mb-2">Selecione um elemento na tela para editar suas propriedades.</p>
                   </div>
                 </>
@@ -1099,6 +1166,48 @@ export default function AdminLabelsPage() {
               <div className="flex justify-end gap-3">
                 <button onClick={() => setShowSaveDialog(false)} className="btn-secondary">Cancelar</button>
                 <button onClick={saveTemplate} className="btn-primary">Salvar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Codes Panel */}
+        {showCodesPanel && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="card max-w-lg w-full max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold">Códigos de Autenticidade</h2>
+                <button onClick={() => setShowCodesPanel(false)} className="p-1 rounded hover:bg-pharma-bg">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 mb-3">
+                <label className="text-xs text-pharma-text-muted">Quantidade:</label>
+                <input type="number" min="1" max="1000" value={codeCount} onChange={e => setCodeCount(parseInt(e.target.value) || 10)}
+                  className="input-field text-sm w-20" />
+                <button onClick={() => generateBulkCodes(codeCount)} className="btn-primary text-sm">
+                  Gerar {codeCount} Códigos
+                </button>
+                {generatedCodes.length > 0 && (
+                  <button onClick={exportCodesToCSV} className="btn-secondary text-sm flex items-center gap-1">
+                    <Download className="w-3 h-3" /> CSV
+                  </button>
+                )}
+              </div>
+              {generatedCodes.length > 0 && (
+                <p className="text-xs text-pharma-text-muted mb-2">{generatedCodes.length} códigos gerados. Clique para copiar.</p>
+              )}
+              <div className="overflow-y-auto flex-1 border border-pharma-border rounded-lg">
+                {generatedCodes.map((code, i) => (
+                  <div key={i} onClick={() => copyCodeToClipboard(code)}
+                    className="flex items-center justify-between px-3 py-1.5 text-xs font-mono hover:bg-pharma-purple/10 cursor-pointer border-b border-pharma-border/50 last:border-b-0">
+                    <span>{i + 1}. {code}</span>
+                    <button onClick={(e) => { e.stopPropagation(); updateField("uid", { text: `UID: ${code}` }); updateField("auth-code", { text: `Auth: ${code}` }) }}
+                      className="text-pharma-purple hover:underline text-xs">
+                      Aplicar
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
