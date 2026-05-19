@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useRef, useCallback } from "react"
 import Cookies from "js-cookie"
-import { Tag, Plus, Download, X, Printer, Save, Trash2, Eye, Layers, Type, Palette, Move, Lock, Unlock, Copy, FileText, Image as ImageIcon, ZoomIn, ZoomOut, RotateCcw, Grid3X3 } from "lucide-react"
+import { Tag, Plus, Download, X, Printer, Save, Trash2, Eye, Layers, Type, Palette, Move, Lock, Unlock, Copy, FileText, Image as ImageIcon, ZoomIn, ZoomOut, RotateCcw, RotateCw, Grid3X3, ChevronUp, ChevronDown, ChevronsUp, ChevronsDown } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 
 interface LabelField {
@@ -20,6 +20,7 @@ interface LabelField {
   opacity?: number
   layerOrder?: number
   visible?: boolean
+  rotation?: number
 }
 
 interface LabelTemplate {
@@ -72,14 +73,16 @@ export default function AdminLabelsPage() {
     stripColor2: "#f5c518",
   })
   const [selectedField, setSelectedField] = useState<LabelField | null>(null)
+  const [selectedFields, setSelectedFields] = useState<LabelField[]>([])
   const [editingProduct, setEditingProduct] = useState<any>(null)
   const [zoom, setZoom] = useState(1)
   const [showGrid, setShowGrid] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, fieldX: 0, fieldY: 0 })
   const [templateName, setTemplateName] = useState("")
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [massExporting, setMassExporting] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState<string>("")
   const canvasRef = useRef<HTMLDivElement>(null)
 
   const token = Cookies.get("token")
@@ -100,6 +103,19 @@ export default function AdminLabelsPage() {
       try { setTemplates(JSON.parse(saved)) } catch { /* ignore */ }
     }
   }, [])
+
+  useEffect(() => {
+    const uidField = currentTemplate.fields.find(f => f.id === "uid")
+    const uid = uidField?.text?.replace("UID: ", "") || "PQ-XXXX-XXXX"
+    import("qrcode").then(mod => {
+      const QRCode = mod.default
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
+      const verifyUrl = `${baseUrl}/verify?code=${uid}`
+      QRCode.toDataURL(verifyUrl, { width: 200, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+        .then((dataUrl: string) => setQrDataUrl(dataUrl))
+        .catch(() => {})
+    }).catch(() => {})
+  }, [currentTemplate.fields])
 
   const toggleProduct = (id: string) => {
     setSelectedProducts(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id])
@@ -132,6 +148,51 @@ export default function AdminLabelsPage() {
     if (selectedField?.id === fieldId) {
       setSelectedField(prev => prev ? { ...prev, ...updates } : null)
     }
+    setSelectedFields(prev => prev.map(f => f.id === fieldId ? { ...f, ...updates } : f))
+  }
+
+  const updateMultipleFields = (updates: Partial<LabelField>) => {
+    const ids = selectedFields.map(f => f.id)
+    setCurrentTemplate(prev => ({
+      ...prev,
+      fields: prev.fields.map(f => ids.includes(f.id) ? { ...f, ...updates } : f),
+    }))
+    setSelectedFields(prev => prev.map(f => ({ ...f, ...updates })))
+    if (selectedField && ids.includes(selectedField.id)) {
+      setSelectedField(prev => prev ? { ...prev, ...updates } : null)
+    }
+  }
+
+  const moveLayerUp = (fieldId: string) => {
+    const sorted = [...currentTemplate.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0))
+    const idx = sorted.findIndex(f => f.id === fieldId)
+    if (idx < sorted.length - 1) {
+      const curOrder = sorted[idx].layerOrder || 0
+      const nextOrder = sorted[idx + 1].layerOrder || 0
+      updateField(sorted[idx + 1].id, { layerOrder: curOrder })
+      updateField(fieldId, { layerOrder: nextOrder })
+    }
+  }
+
+  const moveLayerDown = (fieldId: string) => {
+    const sorted = [...currentTemplate.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0))
+    const idx = sorted.findIndex(f => f.id === fieldId)
+    if (idx > 0) {
+      const curOrder = sorted[idx].layerOrder || 0
+      const prevOrder = sorted[idx - 1].layerOrder || 0
+      updateField(sorted[idx - 1].id, { layerOrder: curOrder })
+      updateField(fieldId, { layerOrder: prevOrder })
+    }
+  }
+
+  const moveToFront = (fieldId: string) => {
+    const maxOrder = Math.max(...currentTemplate.fields.map(f => f.layerOrder || 0), 0)
+    updateField(fieldId, { layerOrder: maxOrder + 1 })
+  }
+
+  const moveToBack = (fieldId: string) => {
+    const minOrder = Math.min(...currentTemplate.fields.map(f => f.layerOrder || 0), 999)
+    updateField(fieldId, { layerOrder: minOrder - 1 })
   }
 
   const openEditorForProduct = (product: any) => {
@@ -175,35 +236,88 @@ export default function AdminLabelsPage() {
     localStorage.setItem("pharmaqo-label-templates", JSON.stringify(updated))
   }
 
+  const addNewTextField = () => {
+    const newId = `text-${Date.now()}`
+    const maxOrder = Math.max(...currentTemplate.fields.map(f => f.layerOrder || 0), 0)
+    const newField: LabelField = {
+      id: newId, type: "text", text: "Novo Texto", x: 100, y: 200,
+      fontSize: 16, fontFamily: "Arial", fill: "#333333", fontWeight: "normal",
+      locked: false, opacity: 1, layerOrder: maxOrder + 1, visible: true,
+    }
+    setCurrentTemplate(prev => ({ ...prev, fields: [...prev.fields, newField] }))
+    setSelectedField(newField)
+  }
+
+  const addNewColorStrip = () => {
+    const newId = `strip-${Date.now()}`
+    const maxOrder = Math.max(...currentTemplate.fields.map(f => f.layerOrder || 0), 0)
+    const newField: LabelField = {
+      id: newId, type: "rect", x: 0, y: 180, width: 800, height: 30,
+      fill: "#8b5cf6", locked: false, opacity: 1, layerOrder: maxOrder + 1, visible: true,
+    }
+    setCurrentTemplate(prev => ({ ...prev, fields: [...prev.fields, newField] }))
+    setSelectedField(newField)
+  }
+
+  const deleteField = (fieldId: string) => {
+    setCurrentTemplate(prev => ({ ...prev, fields: prev.fields.filter(f => f.id !== fieldId) }))
+    if (selectedField?.id === fieldId) setSelectedField(null)
+  }
+
   const handleCanvasMouseDown = (e: React.MouseEvent, field: LabelField) => {
     if (field.locked) return
     e.preventDefault()
     e.stopPropagation()
-    setSelectedField(field)
-    setIsDragging(true)
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (rect) {
-      setDragOffset({
-        x: e.clientX / zoom - field.x,
-        y: e.clientY / zoom - field.y,
+    if (e.shiftKey) {
+      setSelectedFields(prev => {
+        const exists = prev.find(f => f.id === field.id)
+        if (exists) return prev.filter(f => f.id !== field.id)
+        return [...prev, field]
       })
+      setSelectedField(field)
+    } else {
+      if (!selectedFields.find(f => f.id === field.id)) {
+        setSelectedFields([field])
+      }
+      setSelectedField(field)
     }
+    setIsDragging(true)
+    setDragStart({ mouseX: e.clientX, mouseY: e.clientY, fieldX: field.x, fieldY: field.y })
   }
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging || !selectedField || selectedField.locked) return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const newX = Math.max(0, (e.clientX - rect.left) / zoom - dragOffset.x + selectedField.x)
-    const newY = Math.max(0, (e.clientY - rect.top) / zoom - dragOffset.y + selectedField.y)
-    const snappedX = showGrid ? Math.round(newX / 10) * 10 : newX
-    const snappedY = showGrid ? Math.round(newY / 10) * 10 : newY
-    updateField(selectedField.id, { x: snappedX, y: snappedY })
-    setDragOffset({
-      x: (e.clientX - rect.left) / zoom - snappedX,
-      y: (e.clientY - rect.top) / zoom - snappedY,
-    })
-  }, [isDragging, selectedField, zoom, showGrid, dragOffset])
+    const deltaX = (e.clientX - dragStart.mouseX) / zoom
+    const deltaY = (e.clientY - dragStart.mouseY) / zoom
+    if (Math.abs(deltaX) < 5 && Math.abs(deltaY) < 5) return
+    if (selectedFields.length > 1) {
+      const primaryField = currentTemplate.fields.find(f => f.id === selectedField.id)
+      if (!primaryField) return
+      const primaryDx = dragStart.fieldX + deltaX - primaryField.x
+      const primaryDy = dragStart.fieldY + deltaY - primaryField.y
+      selectedFields.forEach(sf => {
+        if (sf.locked) return
+        const curField = currentTemplate.fields.find(f => f.id === sf.id)
+        if (!curField) return
+        let nx = curField.x + primaryDx
+        let ny = curField.y + primaryDy
+        nx = Math.max(0, Math.min(nx, currentTemplate.width - 20))
+        ny = Math.max(0, Math.min(ny, currentTemplate.height - 20))
+        if (showGrid) { nx = Math.round(nx / 10) * 10; ny = Math.round(ny / 10) * 10 }
+        updateField(sf.id, { x: Math.round(nx), y: Math.round(ny) })
+      })
+    } else {
+      let newX = dragStart.fieldX + deltaX
+      let newY = dragStart.fieldY + deltaY
+      newX = Math.max(0, Math.min(newX, currentTemplate.width - 20))
+      newY = Math.max(0, Math.min(newY, currentTemplate.height - 20))
+      if (showGrid) {
+        newX = Math.round(newX / 10) * 10
+        newY = Math.round(newY / 10) * 10
+      }
+      updateField(selectedField.id, { x: Math.round(newX), y: Math.round(newY) })
+    }
+  }, [isDragging, selectedField, selectedFields, zoom, showGrid, dragStart, currentTemplate.width, currentTemplate.height])
 
   const handleCanvasMouseUp = useCallback(() => {
     setIsDragging(false)
@@ -214,7 +328,7 @@ export default function AdminLabelsPage() {
     const h = template.height * scale
     return (
       <div style={{ width: w, height: h, position: "relative", backgroundColor: template.bgColor || "#f8f8f8", overflow: "hidden", backgroundImage: `url(/images/label-template.png)`, backgroundSize: "cover", backgroundPosition: "center" }}>
-        {showGrid && scale === zoom && (
+        {showGrid && (
           <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
             {Array.from({ length: Math.ceil(template.width / 20) }, (_, i) => (
               <line key={`v${i}`} x1={i * 20 * scale} y1={0} x2={i * 20 * scale} y2={h} stroke="rgba(139,92,246,0.1)" strokeWidth={1} />
@@ -225,6 +339,9 @@ export default function AdminLabelsPage() {
           </svg>
         )}
         {[...template.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0)).filter(f => f.visible !== false).map(field => {
+          const isMultiSelected = selectedFields.some(sf => sf.id === field.id)
+          const isSelected = selectedField?.id === field.id || isMultiSelected
+          const rotStyle = field.rotation ? `rotate(${field.rotation}deg)` : undefined
           if (field.type === "rect") {
             return (
               <div
@@ -240,8 +357,10 @@ export default function AdminLabelsPage() {
                   backgroundColor: field.fill || "#1a3a7c",
                   opacity: field.opacity ?? 1,
                   cursor: field.locked ? "default" : "move",
-                  outline: selectedField?.id === field.id ? "2px solid #8b5cf6" : "none",
+                  outline: isSelected ? `2px solid ${isMultiSelected && selectedFields.length > 1 ? "#f59e0b" : "#8b5cf6"}` : "none",
                   outlineOffset: "2px",
+                  transform: rotStyle,
+                  transformOrigin: "center center",
                 }}
               />
             )
@@ -260,7 +379,7 @@ export default function AdminLabelsPage() {
                   height: (field.height || 150) * scale,
                   opacity: field.opacity ?? 1,
                   cursor: field.locked ? "default" : "move",
-                  outline: selectedField?.id === field.id ? "2px solid #8b5cf6" : "none",
+                  outline: isSelected ? `2px solid ${isMultiSelected && selectedFields.length > 1 ? "#f59e0b" : "#8b5cf6"}` : "none",
                   outlineOffset: "2px",
                   display: "flex",
                   alignItems: "center",
@@ -268,12 +387,18 @@ export default function AdminLabelsPage() {
                   border: `2px solid ${field.fill || "#1a3a7c"}`,
                   borderRadius: "8px",
                   backgroundColor: "white",
+                  transform: rotStyle,
+                  transformOrigin: "center center",
                 }}
               >
-                <div style={{ textAlign: "center" }}>
-                  <Grid3X3 style={{ width: 40 * scale, height: 40 * scale, color: field.fill || "#1a3a7c" }} />
-                  <p style={{ fontSize: 8 * scale, color: "#888", marginTop: 4 }}>QR Code</p>
-                </div>
+                {qrDataUrl ? (
+                  <img src={qrDataUrl} alt="QR Code" style={{ width: "100%", height: "100%", objectFit: "contain" }} draggable={false} />
+                ) : (
+                  <div style={{ textAlign: "center" }}>
+                    <Grid3X3 style={{ width: 40 * scale, height: 40 * scale, color: field.fill || "#1a3a7c" }} />
+                    <p style={{ fontSize: 8 * scale, color: "#888", marginTop: 4 }}>QR Code</p>
+                  </div>
+                )}
               </div>
             )
           }
@@ -292,11 +417,13 @@ export default function AdminLabelsPage() {
                 fontWeight: field.fontWeight || "normal",
                 opacity: field.opacity ?? 1,
                 cursor: field.locked ? "default" : "move",
-                outline: selectedField?.id === field.id ? "2px solid #8b5cf6" : "none",
+                outline: isSelected ? `2px solid ${isMultiSelected && selectedFields.length > 1 ? "#f59e0b" : "#8b5cf6"}` : "none",
                 outlineOffset: "2px",
                 padding: `${2 * scale}px`,
                 whiteSpace: "nowrap",
                 userSelect: "none",
+                transform: rotStyle,
+                transformOrigin: "center center",
               }}
             >
               {field.text}
@@ -305,6 +432,86 @@ export default function AdminLabelsPage() {
         })}
       </div>
     )
+  }
+
+  const hexToRgb = (hex: string) => {
+    const clean = hex.replace("#", "")
+    return { r: parseInt(clean.slice(0, 2), 16) / 255, g: parseInt(clean.slice(2, 4), 16) / 255, b: parseInt(clean.slice(4, 6), 16) / 255 }
+  }
+
+  const exportEditorPDF = async () => {
+    const { PDFDocument, rgb, StandardFonts } = await import("pdf-lib")
+    const QRCode = (await import("qrcode")).default
+    const pdfDoc = await PDFDocument.create()
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+    const aspect = currentTemplate.width / currentTemplate.height
+    const pageWidth = 595
+    const pageHeight = 842
+    const margin = 30
+    const availW = pageWidth - margin * 2
+    const availH = pageHeight - margin * 2
+    let labelWidth: number, labelHeight: number
+    if (availW / aspect <= availH) {
+      labelWidth = availW
+      labelHeight = availW / aspect
+    } else {
+      labelHeight = availH
+      labelWidth = availH * aspect
+    }
+    const uniformScale = labelWidth / currentTemplate.width
+    const labelLeft = margin + (availW - labelWidth) / 2
+    const labelTop = pageHeight - margin
+
+    const page = pdfDoc.addPage([pageWidth, pageHeight])
+    const bgC = hexToRgb(currentTemplate.bgColor || "#f8f8f8")
+    page.drawRectangle({ x: labelLeft, y: labelTop - labelHeight, width: labelWidth, height: labelHeight,
+      color: rgb(bgC.r, bgC.g, bgC.b), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
+
+    const sortedFields = [...currentTemplate.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0)).filter(f => f.visible !== false)
+
+    for (const field of sortedFields) {
+      const fx = labelLeft + field.x * uniformScale
+      const fy = labelTop - field.y * uniformScale
+
+      if (field.type === "rect") {
+        const c = hexToRgb(field.fill || "#1a3a7c")
+        const rW = (field.width || 100) * uniformScale
+        const rH = (field.height || 40) * uniformScale
+        page.drawRectangle({ x: fx, y: fy - rH, width: rW, height: rH,
+          color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1 })
+      } else if (field.type === "text") {
+        const c = hexToRgb(field.fill || "#000000")
+        const fontSize = Math.max(4, (field.fontSize || 14) * uniformScale)
+        const useFont = field.fontWeight === "bold" ? boldFont : font
+        try {
+          page.drawText(field.text || "", { x: fx, y: fy - fontSize, size: fontSize, font: useFont, color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1 })
+        } catch { /* skip unsupported chars */ }
+      } else if (field.type === "qrcode") {
+        try {
+          const uidField = currentTemplate.fields.find(f => f.id === "uid")
+          const uid = uidField?.text?.replace("UID: ", "") || "PQ-XXXX-XXXX"
+          const verifyUrl = `${window.location.origin}/verify?code=${uid}`
+          const qrImg = await QRCode.toDataURL(verifyUrl, { width: 300, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+          const qrImageBytes = Uint8Array.from(atob(qrImg.split(",")[1]), (c: string) => c.charCodeAt(0))
+          const qrImage = await pdfDoc.embedPng(qrImageBytes)
+          const qrW = (field.width || 150) * uniformScale
+          const qrH = (field.height || 150) * uniformScale
+          page.drawImage(qrImage, { x: fx, y: fy - qrH, width: qrW, height: qrH })
+        } catch { /* QR failed */ }
+      }
+    }
+
+    const pdfBytes = await pdfDoc.save()
+    const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    const pName = editingProduct?.name || "etiqueta"
+    a.download = `${pName.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const exportPDF = async () => {
@@ -347,9 +554,9 @@ export default function AdminLabelsPage() {
         page.drawText(`UID: ${uid.slice(0, 20)}`, { x: x + 15, y: y - 260, size: 7, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
 
         try {
-          const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify?code=${uid}`
-          const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
-          const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
+          const verifyUrl = `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/verify?code=${uid}`
+          const qrPngUrl = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+          const qrImageBytes = Uint8Array.from(atob(qrPngUrl.split(",")[1]), c => c.charCodeAt(0))
           const qrImage = await pdfDoc.embedPng(qrImageBytes)
           page.drawImage(qrImage, { x: x + 140, y: y - 250, width: 80, height: 80 })
         } catch { /* QR generation failed */ }
@@ -405,9 +612,9 @@ export default function AdminLabelsPage() {
           page.drawText(`UID: ${uid.slice(0, 20)}`, { x: x + 15, y: y - 260, size: 7, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
 
           try {
-            const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify?code=${uid}`
-            const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
-            const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
+            const verifyUrl = `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/verify?code=${uid}`
+            const qrPngUrl2 = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+            const qrImageBytes = Uint8Array.from(atob(qrPngUrl2.split(",")[1]), c => c.charCodeAt(0))
             const qrImage = await pdfDoc.embedPng(qrImageBytes)
             page.drawImage(qrImage, { x: x + 140, y: y - 250, width: 80, height: 80 })
           } catch { /* ignore */ }
@@ -455,9 +662,9 @@ export default function AdminLabelsPage() {
         page.drawText(`UID: ${uid.slice(0, 16)}`, { x: 10, y: 35, size: 6, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
 
         try {
-          const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify?code=${uid}`
-          const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 80, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
-          const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
+          const verifyUrl = `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/verify?code=${uid}`
+          const qrPngUrl3 = await QRCode.toDataURL(verifyUrl, { width: 80, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+          const qrImageBytes = Uint8Array.from(atob(qrPngUrl3.split(",")[1]), c => c.charCodeAt(0))
           const qrImage = await pdfDoc.embedPng(qrImageBytes)
           page.drawImage(qrImage, { x: 210, y: 50, width: 70, height: 70 })
         } catch { /* ignore */ }
@@ -505,10 +712,16 @@ export default function AdminLabelsPage() {
             <button onClick={() => setZoom(1)} className="p-2 rounded-lg hover:bg-pharma-bg text-pharma-text-muted" title="Reset">
               <RotateCcw className="w-4 h-4" />
             </button>
+            <button onClick={addNewTextField} className="btn-secondary text-sm flex items-center gap-1" title="Adicionar Texto">
+              <Type className="w-4 h-4" /> Novo Texto
+            </button>
+            <button onClick={addNewColorStrip} className="btn-secondary text-sm flex items-center gap-1" title="Adicionar Faixa">
+              <Palette className="w-4 h-4" /> Nova Faixa
+            </button>
             <button onClick={() => setShowSaveDialog(true)} className="btn-secondary text-sm flex items-center gap-1">
               <Save className="w-4 h-4" /> Salvar Template
             </button>
-            <button onClick={exportPDF} className="btn-primary text-sm flex items-center gap-1">
+            <button onClick={exportEditorPDF} className="btn-primary text-sm flex items-center gap-1">
               <Download className="w-4 h-4" /> Exportar PDF
             </button>
           </div>
@@ -517,26 +730,59 @@ export default function AdminLabelsPage() {
         <div className="flex gap-4" style={{ height: "calc(100vh - 180px)" }}>
           {/* Left Sidebar - Layers */}
           <div className="w-56 bg-pharma-card rounded-xl border border-pharma-border overflow-y-auto flex-shrink-0">
-            <div className="p-3 border-b border-pharma-border">
+            <div className="p-3 border-b border-pharma-border flex items-center justify-between">
               <h3 className="font-semibold text-sm flex items-center gap-2"><Layers className="w-4 h-4" /> Camadas</h3>
+              <div className="flex gap-1">
+                <button onClick={addNewTextField} className="p-1 rounded hover:bg-pharma-purple/20 text-pharma-purple" title="Adicionar Texto">
+                  <Type className="w-3 h-3" />
+                </button>
+                <button onClick={addNewColorStrip} className="p-1 rounded hover:bg-pharma-purple/20 text-pharma-purple" title="Adicionar Faixa">
+                  <Palette className="w-3 h-3" />
+                </button>
+              </div>
             </div>
             <div className="p-2 space-y-1">
-              {[...currentTemplate.fields].sort((a, b) => (b.layerOrder || 0) - (a.layerOrder || 0)).map(field => (
-                <button
+              {[...currentTemplate.fields].sort((a, b) => (b.layerOrder || 0) - (a.layerOrder || 0)).map(field => {
+                const isInMulti = selectedFields.some(sf => sf.id === field.id)
+                return (
+                <div
                   key={field.id}
-                  onClick={() => setSelectedField(field)}
-                  className={`w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors ${
+                  onClick={(e) => {
+                    if (e.shiftKey) {
+                      setSelectedFields(prev => {
+                        const exists = prev.find(f => f.id === field.id)
+                        if (exists) return prev.filter(f => f.id !== field.id)
+                        return [...prev, field]
+                      })
+                    } else {
+                      setSelectedFields([field])
+                    }
+                    setSelectedField(field)
+                  }}
+                  className={`w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors cursor-pointer ${
+                    isInMulti && selectedFields.length > 1 ? "bg-amber-500/20 text-amber-400" :
                     selectedField?.id === field.id ? "bg-pharma-purple/20 text-pharma-purple" : "hover:bg-pharma-bg text-pharma-text-muted"
                   }`}
                 >
                   {field.locked ? <Lock className="w-3 h-3 flex-shrink-0" /> : <Unlock className="w-3 h-3 flex-shrink-0" />}
-                  <span className="truncate">{field.id}</span>
-                  <button onClick={(e) => { e.stopPropagation(); updateField(field.id, { visible: !field.visible }) }}
-                    className={`ml-auto ${field.visible !== false ? "text-pharma-purple" : "text-pharma-text-muted/30"}`}>
-                    <Eye className="w-3 h-3" />
-                  </button>
-                </button>
-              ))}
+                  <span className="truncate flex-1">{field.id}</span>
+                  <div className="flex items-center gap-0.5 ml-auto">
+                    <button onClick={(e) => { e.stopPropagation(); moveLayerUp(field.id) }}
+                      className="p-0.5 rounded hover:bg-pharma-purple/20 text-pharma-text-muted hover:text-pharma-purple" title="Subir camada">
+                      <ChevronUp className="w-3 h-3" />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); moveLayerDown(field.id) }}
+                      className="p-0.5 rounded hover:bg-pharma-purple/20 text-pharma-text-muted hover:text-pharma-purple" title="Descer camada">
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); updateField(field.id, { visible: !field.visible }) }}
+                      className={`p-0.5 ${field.visible !== false ? "text-pharma-purple" : "text-pharma-text-muted/30"}`}>
+                      <Eye className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+                )
+              })}
             </div>
 
             {/* Saved Templates */}
@@ -566,7 +812,7 @@ export default function AdminLabelsPage() {
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
             onMouseLeave={handleCanvasMouseUp}
-            onClick={() => setSelectedField(null)}
+            onClick={() => { setSelectedField(null); setSelectedFields([]) }}
           >
             <div ref={canvasRef} className="shadow-2xl rounded-lg overflow-hidden border border-pharma-border" style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}>
               {renderLabelPreview(currentTemplate, 1)}
@@ -607,18 +853,32 @@ export default function AdminLabelsPage() {
                     </div>
                   </div>
                   {(selectedField.type === "rect" || selectedField.type === "qrcode") && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs text-pharma-text-muted block mb-1">Largura</label>
-                        <input type="number" value={selectedField.width || 100} onChange={e => updateField(selectedField.id, { width: parseInt(e.target.value) || 100 })}
-                          className="input-field text-sm" />
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-pharma-text-muted block mb-1">Largura</label>
+                          <input type="number" value={selectedField.width || 100} onChange={e => updateField(selectedField.id, { width: parseInt(e.target.value) || 100 })}
+                            className="input-field text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-pharma-text-muted block mb-1">Altura</label>
+                          <input type="number" value={selectedField.height || 40} onChange={e => updateField(selectedField.id, { height: parseInt(e.target.value) || 40 })}
+                            className="input-field text-sm" />
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-xs text-pharma-text-muted block mb-1">Altura</label>
-                        <input type="number" value={selectedField.height || 40} onChange={e => updateField(selectedField.id, { height: parseInt(e.target.value) || 40 })}
-                          className="input-field text-sm" />
-                      </div>
-                    </div>
+                      {selectedField.type === "rect" && (
+                        <div>
+                          <label className="text-xs text-pharma-text-muted block mb-1">Tipo de Faixa</label>
+                          <div className="grid grid-cols-4 gap-1">
+                            {["#1a3a7c", "#f5c518", "#8b5cf6", "#dc2626", "#059669", "#d97706", "#ec4899", "#000000"].map(c => (
+                              <button key={c} onClick={() => updateField(selectedField.id, { fill: c })}
+                                className={`w-full h-6 rounded border-2 transition-all ${selectedField.fill === c ? "border-white scale-110" : "border-transparent"}`}
+                                style={{ backgroundColor: c }} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                   {selectedField.type === "text" && (
                     <>
@@ -659,10 +919,46 @@ export default function AdminLabelsPage() {
                     </div>
                   </div>
                   <div>
+                    <label className="text-xs text-pharma-text-muted block mb-1">Rotação: {selectedField.rotation || 0}°</label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min="-180" max="180" value={selectedField.rotation || 0}
+                        onChange={e => updateField(selectedField.id, { rotation: parseInt(e.target.value) })}
+                        className="flex-1 accent-pharma-purple" />
+                      <input type="number" min="-360" max="360" value={selectedField.rotation || 0}
+                        onChange={e => updateField(selectedField.id, { rotation: parseInt(e.target.value) || 0 })}
+                        className="input-field text-sm w-16" />
+                      <button onClick={() => updateField(selectedField.id, { rotation: 0 })}
+                        className="p-1 rounded hover:bg-pharma-bg text-pharma-text-muted" title="Reset rotação">
+                        <RotateCcw className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
                     <label className="text-xs text-pharma-text-muted block mb-1">Opacidade: {Math.round((selectedField.opacity ?? 1) * 100)}%</label>
                     <input type="range" min="0" max="100" value={Math.round((selectedField.opacity ?? 1) * 100)}
                       onChange={e => updateField(selectedField.id, { opacity: parseInt(e.target.value) / 100 })}
                       className="w-full accent-pharma-purple" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-pharma-text-muted block mb-1">Camada</label>
+                    <div className="flex gap-1">
+                      <button onClick={() => moveToBack(selectedField.id)}
+                        className="flex-1 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 bg-pharma-bg text-pharma-text-muted hover:text-white" title="Enviar para trás">
+                        <ChevronsDown className="w-3 h-3" /> Trás
+                      </button>
+                      <button onClick={() => moveLayerDown(selectedField.id)}
+                        className="flex-1 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 bg-pharma-bg text-pharma-text-muted hover:text-white" title="Descer camada">
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => moveLayerUp(selectedField.id)}
+                        className="flex-1 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 bg-pharma-bg text-pharma-text-muted hover:text-white" title="Subir camada">
+                        <ChevronUp className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => moveToFront(selectedField.id)}
+                        className="flex-1 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 bg-pharma-bg text-pharma-text-muted hover:text-white" title="Trazer para frente">
+                        <ChevronsUp className="w-3 h-3" /> Frente
+                      </button>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => updateField(selectedField.id, { locked: !selectedField.locked })}
@@ -670,6 +966,18 @@ export default function AdminLabelsPage() {
                       {selectedField.locked ? <><Lock className="w-3 h-3" /> Locked</> : <><Unlock className="w-3 h-3" /> Unlocked</>}
                     </button>
                   </div>
+                  {selectedFields.length > 1 && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
+                      <p className="text-xs text-amber-400 font-semibold mb-1">{selectedFields.length} elementos selecionados</p>
+                      <p className="text-xs text-pharma-text-muted">Shift+click para adicionar/remover</p>
+                    </div>
+                  )}
+                  {!['bg-strip-top', 'bg-strip-bottom', 'bg-strip-accent', 'logo', 'qrcode'].includes(selectedField.id) && (
+                    <button onClick={() => deleteField(selectedField.id)}
+                      className="w-full text-xs py-2 rounded-lg flex items-center justify-center gap-1 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
+                      <Trash2 className="w-3 h-3" /> Remover Elemento
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
