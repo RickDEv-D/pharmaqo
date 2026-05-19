@@ -78,7 +78,8 @@ export default function AdminLabelsPage() {
   const [zoom, setZoom] = useState(1)
   const [showGrid, setShowGrid] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, fieldX: 0, fieldY: 0 })
+  const [isResizing, setIsResizing] = useState<string | null>(null)
+  const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, fieldX: 0, fieldY: 0, fieldW: 0, fieldH: 0 })
   const [templateName, setTemplateName] = useState("")
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [massExporting, setMassExporting] = useState(false)
@@ -282,10 +283,33 @@ export default function AdminLabelsPage() {
       setSelectedField(field)
     }
     setIsDragging(true)
-    setDragStart({ mouseX: e.clientX, mouseY: e.clientY, fieldX: field.x, fieldY: field.y })
+    setDragStart({ mouseX: e.clientX, mouseY: e.clientY, fieldX: field.x, fieldY: field.y, fieldW: field.width || 200, fieldH: field.height || 30 })
+  }
+
+  const handleResizeStart = (e: React.MouseEvent, field: LabelField, handle: string) => {
+    if (field.locked) return
+    e.preventDefault()
+    e.stopPropagation()
+    setSelectedField(field)
+    setIsResizing(handle)
+    setDragStart({ mouseX: e.clientX, mouseY: e.clientY, fieldX: field.x, fieldY: field.y, fieldW: field.width || 200, fieldH: field.height || 30 })
   }
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isResizing && selectedField && !selectedField.locked) {
+      const deltaX = (e.clientX - dragStart.mouseX) / zoom
+      const deltaY = (e.clientY - dragStart.mouseY) / zoom
+      let newW = dragStart.fieldW
+      let newH = dragStart.fieldH
+      let newX = dragStart.fieldX
+      let newY = dragStart.fieldY
+      if (isResizing.includes("e")) newW = Math.max(30, dragStart.fieldW + deltaX)
+      if (isResizing.includes("w")) { newW = Math.max(30, dragStart.fieldW - deltaX); newX = dragStart.fieldX + deltaX }
+      if (isResizing.includes("s")) newH = Math.max(15, dragStart.fieldH + deltaY)
+      if (isResizing.includes("n")) { newH = Math.max(15, dragStart.fieldH - deltaY); newY = dragStart.fieldY + deltaY }
+      updateField(selectedField.id, { width: Math.round(newW), height: Math.round(newH), x: Math.round(newX), y: Math.round(newY) })
+      return
+    }
     if (!isDragging || !selectedField || selectedField.locked) return
     const deltaX = (e.clientX - dragStart.mouseX) / zoom
     const deltaY = (e.clientY - dragStart.mouseY) / zoom
@@ -317,10 +341,11 @@ export default function AdminLabelsPage() {
       }
       updateField(selectedField.id, { x: Math.round(newX), y: Math.round(newY) })
     }
-  }, [isDragging, selectedField, selectedFields, zoom, showGrid, dragStart, currentTemplate.width, currentTemplate.height])
+  }, [isDragging, isResizing, selectedField, selectedFields, zoom, showGrid, dragStart, currentTemplate.width, currentTemplate.height])
 
   const handleCanvasMouseUp = useCallback(() => {
     setIsDragging(false)
+    setIsResizing(null)
   }, [])
 
   const renderLabelPreview = (template: LabelTemplate, scale: number = 1) => {
@@ -402,6 +427,8 @@ export default function AdminLabelsPage() {
               </div>
             )
           }
+          const hasBox = !!(field.width && field.width > 0)
+          const outlineColor = isMultiSelected && selectedFields.length > 1 ? "#f59e0b" : "#8b5cf6"
           return (
             <div
               key={field.id}
@@ -411,22 +438,46 @@ export default function AdminLabelsPage() {
                 position: "absolute",
                 left: field.x * scale,
                 top: field.y * scale,
+                width: hasBox ? (field.width! * scale) : undefined,
+                height: (hasBox && field.height) ? (field.height * scale) : undefined,
                 fontSize: (field.fontSize || 14) * scale,
                 fontFamily: field.fontFamily || "Arial",
                 color: field.fill || "#000",
                 fontWeight: field.fontWeight || "normal",
                 opacity: field.opacity ?? 1,
                 cursor: field.locked ? "default" : "move",
-                outline: isSelected ? `2px solid ${isMultiSelected && selectedFields.length > 1 ? "#f59e0b" : "#8b5cf6"}` : "none",
+                outline: isSelected ? `2px solid ${outlineColor}` : "none",
                 outlineOffset: "2px",
                 padding: `${2 * scale}px`,
-                whiteSpace: "nowrap",
+                whiteSpace: hasBox ? "normal" : "nowrap",
+                wordBreak: hasBox ? "break-word" : undefined,
+                overflow: hasBox ? "hidden" : undefined,
                 userSelect: "none",
                 transform: rotStyle,
                 transformOrigin: "center center",
+                lineHeight: 1.3,
               }}
             >
               {field.text}
+              {isSelected && !field.locked && (
+                <>
+                  {/* Right edge */}
+                  <div onMouseDown={(e) => handleResizeStart(e, field, "e")}
+                    style={{ position: "absolute", right: -4, top: "50%", marginTop: -5, width: 8, height: 10, background: outlineColor, borderRadius: 2, cursor: "e-resize" }} />
+                  {/* Bottom edge */}
+                  <div onMouseDown={(e) => handleResizeStart(e, field, "s")}
+                    style={{ position: "absolute", bottom: -4, left: "50%", marginLeft: -5, width: 10, height: 8, background: outlineColor, borderRadius: 2, cursor: "s-resize" }} />
+                  {/* Bottom-right corner */}
+                  <div onMouseDown={(e) => handleResizeStart(e, field, "se")}
+                    style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, background: outlineColor, borderRadius: 2, cursor: "se-resize" }} />
+                  {/* Left edge */}
+                  <div onMouseDown={(e) => handleResizeStart(e, field, "w")}
+                    style={{ position: "absolute", left: -4, top: "50%", marginTop: -5, width: 8, height: 10, background: outlineColor, borderRadius: 2, cursor: "w-resize" }} />
+                  {/* Top edge */}
+                  <div onMouseDown={(e) => handleResizeStart(e, field, "n")}
+                    style={{ position: "absolute", top: -4, left: "50%", marginLeft: -5, width: 10, height: 8, background: outlineColor, borderRadius: 2, cursor: "n-resize" }} />
+                </>
+              )}
             </div>
           )
         })}
@@ -836,8 +887,8 @@ export default function AdminLabelsPage() {
                   {selectedField.type === "text" && (
                     <div>
                       <label className="text-xs text-pharma-text-muted block mb-1">Texto</label>
-                      <input type="text" value={selectedField.text || ""} onChange={e => updateField(selectedField.id, { text: e.target.value })}
-                        className="input-field text-sm" />
+                      <textarea value={selectedField.text || ""} onChange={e => updateField(selectedField.id, { text: e.target.value })}
+                        rows={2} className="input-field text-sm resize-none" />
                     </div>
                   )}
                   <div className="grid grid-cols-2 gap-2">
@@ -852,20 +903,25 @@ export default function AdminLabelsPage() {
                         className="input-field text-sm" />
                     </div>
                   </div>
-                  {(selectedField.type === "rect" || selectedField.type === "qrcode") && (
+                  {(selectedField.type === "rect" || selectedField.type === "qrcode" || selectedField.type === "text") && (
                     <>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-xs text-pharma-text-muted block mb-1">Largura</label>
-                          <input type="number" value={selectedField.width || 100} onChange={e => updateField(selectedField.id, { width: parseInt(e.target.value) || 100 })}
+                          <input type="number" value={selectedField.width || ""} placeholder="Auto"
+                            onChange={e => updateField(selectedField.id, { width: parseInt(e.target.value) || 0 })}
                             className="input-field text-sm" />
                         </div>
                         <div>
                           <label className="text-xs text-pharma-text-muted block mb-1">Altura</label>
-                          <input type="number" value={selectedField.height || 40} onChange={e => updateField(selectedField.id, { height: parseInt(e.target.value) || 40 })}
+                          <input type="number" value={selectedField.height || ""} placeholder="Auto"
+                            onChange={e => updateField(selectedField.id, { height: parseInt(e.target.value) || 0 })}
                             className="input-field text-sm" />
                         </div>
                       </div>
+                      {selectedField.type === "text" && (
+                        <p className="text-xs text-pharma-text-muted -mt-1">Defina largura para quebrar texto. Arraste as alças na tela.</p>
+                      )}
                       {selectedField.type === "rect" && (
                         <div>
                           <label className="text-xs text-pharma-text-muted block mb-1">Tipo de Faixa</label>
