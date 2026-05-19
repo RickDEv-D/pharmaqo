@@ -35,22 +35,38 @@ interface LabelTemplate {
   stripColor2?: string
 }
 
+const generateAuthCode = (productName: string): string => {
+  const abbrev = productName
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase()
+    .slice(0, 7)
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+  let random = ""
+  for (let i = 0; i < 8; i++) random += chars[Math.floor(Math.random() * chars.length)]
+  return `PHQ-${abbrev || "PROD"}-${random}`
+}
+
 const DEFAULT_FIELDS: LabelField[] = [
-  { id: "bg-strip-top", type: "rect", x: 0, y: 0, width: 800, height: 40, fill: "#1a3a7c", locked: true, opacity: 1, layerOrder: 1, visible: true },
-  { id: "bg-strip-bottom", type: "rect", x: 0, y: 360, width: 800, height: 40, fill: "#1a3a7c", locked: true, opacity: 1, layerOrder: 2, visible: true },
-  { id: "bg-strip-accent", type: "rect", x: 0, y: 350, width: 800, height: 12, fill: "#f5c518", locked: true, opacity: 1, layerOrder: 3, visible: true },
-  { id: "logo", type: "text", text: "PharmaQo Labs", x: 30, y: 60, fontSize: 28, fontFamily: "Arial", fill: "#1a3a7c", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 10, visible: true },
-  { id: "product-name", type: "text", text: "PRODUTO", x: 30, y: 100, fontSize: 32, fontFamily: "Arial", fill: "#1a1a2e", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 11, visible: true },
-  { id: "dosage", type: "text", text: "100mg/ml", x: 30, y: 140, fontSize: 18, fontFamily: "Arial", fill: "#444", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 12, visible: true },
-  { id: "subtitle", type: "text", text: "Pharmaceutical Grade", x: 30, y: 165, fontSize: 14, fontFamily: "Arial", fill: "#666", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 13, visible: true },
-  { id: "composition", type: "text", text: "Composition: Active Ingredient", x: 30, y: 200, fontSize: 12, fontFamily: "Arial", fill: "#555", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 14, visible: true },
-  { id: "application", type: "text", text: "Intramuscular Use", x: 30, y: 220, fontSize: 12, fontFamily: "Arial", fill: "#555", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 15, visible: true },
-  { id: "lot", type: "text", text: "Lot: PQ-2024-001", x: 30, y: 260, fontSize: 11, fontFamily: "Arial", fill: "#777", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 16, visible: true },
-  { id: "expiry", type: "text", text: "Exp: 12/2026", x: 30, y: 280, fontSize: 11, fontFamily: "Arial", fill: "#777", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 17, visible: true },
-  { id: "uid", type: "text", text: "UID: PQ-XXXX-XXXX", x: 30, y: 310, fontSize: 10, fontFamily: "Arial", fill: "#1a3a7c", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 18, visible: true },
-  { id: "auth-code", type: "text", text: "Auth: XXXX-XXXX-XXXX", x: 30, y: 330, fontSize: 9, fontFamily: "Arial", fill: "#999", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 19, visible: true },
-  { id: "qrcode", type: "qrcode", text: "QR", x: 620, y: 120, width: 150, height: 150, fill: "#1a3a7c", locked: false, opacity: 1, layerOrder: 20, visible: true },
-  { id: "qr-label", type: "text", text: "Scan to verify", x: 640, y: 285, fontSize: 10, fontFamily: "Arial", fill: "#888", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 21, visible: true },
+  { id: "bg-strip-top", type: "rect", x: 0, y: 0, width: 1024, height: 18, fill: "#4da6d9", locked: true, opacity: 1, layerOrder: 1, visible: true },
+  { id: "bg-strip-bottom", type: "rect", x: 0, y: 494, width: 1024, height: 18, fill: "#4da6d9", locked: true, opacity: 1, layerOrder: 2, visible: true },
+  { id: "bg-strip-accent", type: "rect", x: 30, y: 260, width: 420, height: 50, fill: "#7c3aac", locked: false, opacity: 1, layerOrder: 3, visible: true },
+  { id: "category", type: "text", text: "60Caps Orals", x: 30, y: 30, fontSize: 16, fontFamily: "Arial", fill: "#333", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 10, visible: true },
+  { id: "product-name", type: "text", text: "Anadrol", x: 30, y: 65, fontSize: 52, fontFamily: "Georgia", fill: "#1a1a2e", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 11, visible: true },
+  { id: "subtitle", type: "text", text: "Oxymetholone", x: 30, y: 150, fontSize: 36, fontFamily: "Georgia", fill: "#333", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 12, visible: true },
+  { id: "dosage", type: "text", text: "50mg x 60 Caps", x: 45, y: 268, fontSize: 22, fontFamily: "Arial", fill: "#ffffff", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 13, visible: true },
+  { id: "application", type: "text", text: "FOR ORAL USE ONLY", x: 30, y: 325, fontSize: 22, fontFamily: "Arial", fill: "#cc0000", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 14, visible: true },
+  { id: "composition", type: "text", text: "Each caps contains: Oxymetholone 50mg.\nKeep out of reach of children, Store below 30°C, Protect\nfrom light, Do not Refrigerate, Prescription only medicine", x: 30, y: 370, fontSize: 12, fontFamily: "Arial", fill: "#333", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 15, visible: true, width: 450 },
+  { id: "security-text", type: "text", text: "Caution 5 layer Security Label\nLabel Concept with multi-step security\nverification for anti-counterfeit protection.", x: 530, y: 30, fontSize: 13, fontFamily: "Arial", fill: "#cc0000", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 16, visible: true, width: 470 },
+  { id: "website", type: "text", text: "www.pharmaqo.life", x: 730, y: 100, fontSize: 16, fontFamily: "Arial", fill: "#cc0000", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 17, visible: true },
+  { id: "mfg", type: "text", text: "MFG: 07-2023", x: 880, y: 200, fontSize: 11, fontFamily: "Arial", fill: "#333", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 18, visible: true, rotation: 90 },
+  { id: "expiry", type: "text", text: "EXP: 07-2026", x: 910, y: 200, fontSize: 11, fontFamily: "Arial", fill: "#333", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 19, visible: true, rotation: 90 },
+  { id: "batch", type: "text", text: "BATCH: 100-0313167250", x: 940, y: 200, fontSize: 11, fontFamily: "Arial", fill: "#333", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 20, visible: true, rotation: 90 },
+  { id: "uid", type: "text", text: "UID: PHQ-ANADROL-XXXXXXXX", x: 970, y: 200, fontSize: 9, fontFamily: "Arial", fill: "#1a3a7c", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 21, visible: true, rotation: 90 },
+  { id: "auth-code", type: "text", text: "Auth: PHQ-ANADROL-XXXXXXXX", x: 990, y: 200, fontSize: 8, fontFamily: "Arial", fill: "#999", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 22, visible: true, rotation: 90 },
+  { id: "qrcode", type: "qrcode", text: "QR", x: 530, y: 140, width: 150, height: 150, fill: "#1a3a7c", locked: false, opacity: 1, layerOrder: 25, visible: true },
+  { id: "qrcode-2", type: "qrcode", text: "QR2", x: 710, y: 140, width: 150, height: 150, fill: "#333333", locked: false, opacity: 1, layerOrder: 26, visible: true },
+  { id: "logo", type: "text", text: "PHARMAQO", x: 700, y: 420, fontSize: 32, fontFamily: "Arial", fill: "#cc0000", fontWeight: "bold", locked: false, opacity: 1, layerOrder: 27, visible: true },
+  { id: "qr-label", type: "text", text: "Scan to verify", x: 570, y: 295, fontSize: 10, fontFamily: "Arial", fill: "#888", fontWeight: "normal", locked: false, opacity: 1, layerOrder: 28, visible: true },
 ]
 
 export default function AdminLabelsPage() {
@@ -64,13 +80,13 @@ export default function AdminLabelsPage() {
   const [templates, setTemplates] = useState<LabelTemplate[]>([])
   const [currentTemplate, setCurrentTemplate] = useState<LabelTemplate>({
     id: "default",
-    name: "PharmaQo Default",
-    width: 800,
-    height: 400,
+    name: "PharmaQo Anadrol",
+    width: 1024,
+    height: 512,
     fields: [...DEFAULT_FIELDS],
     bgColor: "#f8f8f8",
-    stripColor1: "#1a3a7c",
-    stripColor2: "#f5c518",
+    stripColor1: "#4da6d9",
+    stripColor2: "#7c3aac",
   })
   const [selectedField, setSelectedField] = useState<LabelField | null>(null)
   const [selectedFields, setSelectedFields] = useState<LabelField[]>([])
@@ -78,11 +94,16 @@ export default function AdminLabelsPage() {
   const [zoom, setZoom] = useState(1)
   const [showGrid, setShowGrid] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, fieldX: 0, fieldY: 0 })
+  const [isResizing, setIsResizing] = useState<string | null>(null)
+  const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, fieldX: 0, fieldY: 0, fieldW: 0, fieldH: 0 })
   const [templateName, setTemplateName] = useState("")
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [massExporting, setMassExporting] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string>("")
+  const [qrDataUrl2, setQrDataUrl2] = useState<string>("")
+  const [generatedCodes, setGeneratedCodes] = useState<string[]>([])
+  const [codeCount, setCodeCount] = useState(10)
+  const [showCodesPanel, setShowCodesPanel] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
 
   const token = Cookies.get("token")
@@ -107,12 +128,17 @@ export default function AdminLabelsPage() {
   useEffect(() => {
     const uidField = currentTemplate.fields.find(f => f.id === "uid")
     const uid = uidField?.text?.replace("UID: ", "") || "PQ-XXXX-XXXX"
+    const batchField = currentTemplate.fields.find(f => f.id === "batch")
+    const batch = batchField?.text?.replace("BATCH: ", "") || "000"
     import("qrcode").then(mod => {
       const QRCode = mod.default
       const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
       const verifyUrl = `${baseUrl}/verify?code=${uid}`
       QRCode.toDataURL(verifyUrl, { width: 200, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
         .then((dataUrl: string) => setQrDataUrl(dataUrl))
+        .catch(() => {})
+      QRCode.toDataURL(`${baseUrl}/verify?batch=${batch}&code=${uid}`, { width: 200, margin: 1, color: { dark: "#333333", light: "#ffffff" } })
+        .then((dataUrl: string) => setQrDataUrl2(dataUrl))
         .catch(() => {})
     }).catch(() => {})
   }, [currentTemplate.fields])
@@ -197,17 +223,22 @@ export default function AdminLabelsPage() {
 
   const openEditorForProduct = (product: any) => {
     setEditingProduct(product)
+    const authCode = generateAuthCode(product.name || "PROD")
     setCurrentTemplate(prev => ({
       ...prev,
       fields: prev.fields.map(f => {
         switch (f.id) {
-          case "product-name": return { ...f, text: product.name?.toUpperCase() || "PRODUTO" }
-          case "dosage": return { ...f, text: product.dosage || "100mg/ml" }
-          case "composition": return { ...f, text: `Composition: ${product.composition || "Active Ingredient"}` }
-          case "lot": return { ...f, text: `Lot: ${product.lot || "PQ-2024-001"}` }
-          case "expiry": return { ...f, text: `Exp: ${product.expiry || "12/2026"}` }
-          case "uid": return { ...f, text: `UID: ${product.uid?.slice(0, 16) || "PQ-XXXX-XXXX"}` }
-          case "auth-code": return { ...f, text: `Auth: ${product.uid?.slice(0, 16) || "XXXX-XXXX-XXXX"}` }
+          case "product-name": return { ...f, text: product.name || "Anadrol" }
+          case "subtitle": return { ...f, text: product.composition?.split(",")[0]?.trim() || product.subtitle || "Oxymetholone" }
+          case "category": return { ...f, text: product.category || "60Caps Orals" }
+          case "dosage": return { ...f, text: product.dosage || "50mg x 60 Caps" }
+          case "application": return { ...f, text: product.application || "FOR ORAL USE ONLY" }
+          case "composition": return { ...f, text: product.composition ? `Each caps contains: ${product.composition}.\nKeep out of reach of children, Store below 30°C, Protect\nfrom light, Do not Refrigerate, Prescription only medicine` : f.text || "" }
+          case "mfg": return { ...f, text: `MFG: ${product.mfg || new Date().toLocaleDateString("en-US", { month: "2-digit", year: "numeric" }).replace("/", "-")}` }
+          case "expiry": return { ...f, text: `EXP: ${product.expiry || new Date(Date.now() + 3 * 365 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { month: "2-digit", year: "numeric" }).replace("/", "-")}` }
+          case "batch": return { ...f, text: `BATCH: ${product.lot || "100-" + Date.now().toString().slice(-10)}` }
+          case "uid": return { ...f, text: `UID: ${authCode}` }
+          case "auth-code": return { ...f, text: `Auth: ${authCode}` }
           default: return f
         }
       }),
@@ -234,6 +265,45 @@ export default function AdminLabelsPage() {
     const updated = templates.filter(t => t.id !== id)
     setTemplates(updated)
     localStorage.setItem("pharmaqo-label-templates", JSON.stringify(updated))
+  }
+
+  const generateAndApplyCode = () => {
+    const productField = currentTemplate.fields.find(f => f.id === "product-name")
+    const productName = productField?.text || "PROD"
+    const code = generateAuthCode(productName)
+    updateField("uid", { text: `UID: ${code}` })
+    updateField("auth-code", { text: `Auth: ${code}` })
+  }
+
+  const generateBulkCodes = (count: number) => {
+    const productField = currentTemplate.fields.find(f => f.id === "product-name")
+    const productName = productField?.text || "PROD"
+    const codes: string[] = []
+    for (let i = 0; i < count; i++) {
+      codes.push(generateAuthCode(productName))
+    }
+    setGeneratedCodes(codes)
+    if (codes.length > 0) {
+      updateField("uid", { text: `UID: ${codes[0]}` })
+      updateField("auth-code", { text: `Auth: ${codes[0]}` })
+    }
+    setShowCodesPanel(true)
+  }
+
+  const exportCodesToCSV = () => {
+    if (generatedCodes.length === 0) return
+    const csv = "Código de Autenticidade\n" + generatedCodes.join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `codigos-autenticidade-${Date.now()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const copyCodeToClipboard = (code: string) => {
+    navigator.clipboard.writeText(code).catch(() => {})
   }
 
   const addNewTextField = () => {
@@ -282,10 +352,33 @@ export default function AdminLabelsPage() {
       setSelectedField(field)
     }
     setIsDragging(true)
-    setDragStart({ mouseX: e.clientX, mouseY: e.clientY, fieldX: field.x, fieldY: field.y })
+    setDragStart({ mouseX: e.clientX, mouseY: e.clientY, fieldX: field.x, fieldY: field.y, fieldW: field.width || 200, fieldH: field.height || 30 })
+  }
+
+  const handleResizeStart = (e: React.MouseEvent, field: LabelField, handle: string) => {
+    if (field.locked) return
+    e.preventDefault()
+    e.stopPropagation()
+    setSelectedField(field)
+    setIsResizing(handle)
+    setDragStart({ mouseX: e.clientX, mouseY: e.clientY, fieldX: field.x, fieldY: field.y, fieldW: field.width || 200, fieldH: field.height || 30 })
   }
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isResizing && selectedField && !selectedField.locked) {
+      const deltaX = (e.clientX - dragStart.mouseX) / zoom
+      const deltaY = (e.clientY - dragStart.mouseY) / zoom
+      let newW = dragStart.fieldW
+      let newH = dragStart.fieldH
+      let newX = dragStart.fieldX
+      let newY = dragStart.fieldY
+      if (isResizing.includes("e")) newW = Math.max(30, dragStart.fieldW + deltaX)
+      if (isResizing.includes("w")) { newW = Math.max(30, dragStart.fieldW - deltaX); newX = dragStart.fieldX + deltaX }
+      if (isResizing.includes("s")) newH = Math.max(15, dragStart.fieldH + deltaY)
+      if (isResizing.includes("n")) { newH = Math.max(15, dragStart.fieldH - deltaY); newY = dragStart.fieldY + deltaY }
+      updateField(selectedField.id, { width: Math.round(newW), height: Math.round(newH), x: Math.round(newX), y: Math.round(newY) })
+      return
+    }
     if (!isDragging || !selectedField || selectedField.locked) return
     const deltaX = (e.clientX - dragStart.mouseX) / zoom
     const deltaY = (e.clientY - dragStart.mouseY) / zoom
@@ -317,17 +410,18 @@ export default function AdminLabelsPage() {
       }
       updateField(selectedField.id, { x: Math.round(newX), y: Math.round(newY) })
     }
-  }, [isDragging, selectedField, selectedFields, zoom, showGrid, dragStart, currentTemplate.width, currentTemplate.height])
+  }, [isDragging, isResizing, selectedField, selectedFields, zoom, showGrid, dragStart, currentTemplate.width, currentTemplate.height])
 
   const handleCanvasMouseUp = useCallback(() => {
     setIsDragging(false)
+    setIsResizing(null)
   }, [])
 
   const renderLabelPreview = (template: LabelTemplate, scale: number = 1) => {
     const w = template.width * scale
     const h = template.height * scale
     return (
-      <div style={{ width: w, height: h, position: "relative", backgroundColor: template.bgColor || "#f8f8f8", overflow: "hidden", backgroundImage: `url(/images/label-template.png)`, backgroundSize: "cover", backgroundPosition: "center" }}>
+      <div style={{ width: w, height: h, position: "relative", backgroundColor: template.bgColor || "#f8f8f8", overflow: "hidden", backgroundImage: `url(/images/anadrol-template.png)`, backgroundSize: "cover", backgroundPosition: "center" }}>
         {showGrid && (
           <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
             {Array.from({ length: Math.ceil(template.width / 20) }, (_, i) => (
@@ -391,8 +485,8 @@ export default function AdminLabelsPage() {
                   transformOrigin: "center center",
                 }}
               >
-                {qrDataUrl ? (
-                  <img src={qrDataUrl} alt="QR Code" style={{ width: "100%", height: "100%", objectFit: "contain" }} draggable={false} />
+                {(field.id === "qrcode-2" ? qrDataUrl2 : qrDataUrl) ? (
+                  <img src={field.id === "qrcode-2" ? qrDataUrl2 : qrDataUrl} alt="QR Code" style={{ width: "100%", height: "100%", objectFit: "contain" }} draggable={false} />
                 ) : (
                   <div style={{ textAlign: "center" }}>
                     <Grid3X3 style={{ width: 40 * scale, height: 40 * scale, color: field.fill || "#1a3a7c" }} />
@@ -402,6 +496,8 @@ export default function AdminLabelsPage() {
               </div>
             )
           }
+          const hasBox = !!(field.width && field.width > 0)
+          const outlineColor = isMultiSelected && selectedFields.length > 1 ? "#f59e0b" : "#8b5cf6"
           return (
             <div
               key={field.id}
@@ -411,22 +507,46 @@ export default function AdminLabelsPage() {
                 position: "absolute",
                 left: field.x * scale,
                 top: field.y * scale,
+                width: hasBox ? (field.width! * scale) : undefined,
+                height: (hasBox && field.height) ? (field.height * scale) : undefined,
                 fontSize: (field.fontSize || 14) * scale,
                 fontFamily: field.fontFamily || "Arial",
                 color: field.fill || "#000",
                 fontWeight: field.fontWeight || "normal",
                 opacity: field.opacity ?? 1,
                 cursor: field.locked ? "default" : "move",
-                outline: isSelected ? `2px solid ${isMultiSelected && selectedFields.length > 1 ? "#f59e0b" : "#8b5cf6"}` : "none",
+                outline: isSelected ? `2px solid ${outlineColor}` : "none",
                 outlineOffset: "2px",
                 padding: `${2 * scale}px`,
-                whiteSpace: "nowrap",
+                whiteSpace: hasBox ? "normal" : "nowrap",
+                wordBreak: hasBox ? "break-word" : undefined,
+                overflow: hasBox ? "hidden" : undefined,
                 userSelect: "none",
                 transform: rotStyle,
                 transformOrigin: "center center",
+                lineHeight: 1.3,
               }}
             >
               {field.text}
+              {isSelected && !field.locked && (
+                <>
+                  {/* Right edge */}
+                  <div onMouseDown={(e) => handleResizeStart(e, field, "e")}
+                    style={{ position: "absolute", right: -4, top: "50%", marginTop: -5, width: 8, height: 10, background: outlineColor, borderRadius: 2, cursor: "e-resize" }} />
+                  {/* Bottom edge */}
+                  <div onMouseDown={(e) => handleResizeStart(e, field, "s")}
+                    style={{ position: "absolute", bottom: -4, left: "50%", marginLeft: -5, width: 10, height: 8, background: outlineColor, borderRadius: 2, cursor: "s-resize" }} />
+                  {/* Bottom-right corner */}
+                  <div onMouseDown={(e) => handleResizeStart(e, field, "se")}
+                    style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, background: outlineColor, borderRadius: 2, cursor: "se-resize" }} />
+                  {/* Left edge */}
+                  <div onMouseDown={(e) => handleResizeStart(e, field, "w")}
+                    style={{ position: "absolute", left: -4, top: "50%", marginTop: -5, width: 8, height: 10, background: outlineColor, borderRadius: 2, cursor: "w-resize" }} />
+                  {/* Top edge */}
+                  <div onMouseDown={(e) => handleResizeStart(e, field, "n")}
+                    style={{ position: "absolute", top: -4, left: "50%", marginLeft: -5, width: 10, height: 8, background: outlineColor, borderRadius: 2, cursor: "n-resize" }} />
+                </>
+              )}
             </div>
           )
         })}
@@ -437,6 +557,53 @@ export default function AdminLabelsPage() {
   const hexToRgb = (hex: string) => {
     const clean = hex.replace("#", "")
     return { r: parseInt(clean.slice(0, 2), 16) / 255, g: parseInt(clean.slice(2, 4), 16) / 255, b: parseInt(clean.slice(4, 6), 16) / 255 }
+  }
+
+  const drawLabelOnPage = async (page: any, pdfDoc: any, fields: LabelField[], templateWidth: number, templateHeight: number, labelLeft: number, labelTop: number, uniformScale: number, font: any, boldFont: any, rgb: any, QRCode: any, hexToRgbFn: (hex: string) => { r: number; g: number; b: number }) => {
+    const sortedFields = [...fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0)).filter(f => f.visible !== false)
+    for (const field of sortedFields) {
+      const fx = labelLeft + field.x * uniformScale
+      const fy = labelTop - field.y * uniformScale
+      if (field.type === "rect") {
+        const c = hexToRgbFn(field.fill || "#1a3a7c")
+        const rW = (field.width || 100) * uniformScale
+        const rH = (field.height || 40) * uniformScale
+        page.drawRectangle({ x: fx, y: fy - rH, width: rW, height: rH, color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1 })
+      } else if (field.type === "text") {
+        const c = hexToRgbFn(field.fill || "#000000")
+        const fontSize = Math.max(4, (field.fontSize || 14) * uniformScale)
+        const useFont = field.fontWeight === "bold" ? boldFont : font
+        const lines = (field.text || "").split("\n")
+        try {
+          if (field.rotation === 90 || field.rotation === -90) {
+            const dir = field.rotation === 90 ? -1 : 1
+            for (let li = 0; li < lines.length; li++) {
+              page.drawText(lines[li], { x: fx, y: fy - fontSize - li * fontSize * 1.3 * dir, size: fontSize, font: useFont, color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1, rotate: { type: "degrees" as const, angle: -field.rotation } })
+            }
+          } else {
+            for (let li = 0; li < lines.length; li++) {
+              page.drawText(lines[li], { x: fx, y: fy - fontSize - li * fontSize * 1.3, size: fontSize, font: useFont, color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1 })
+            }
+          }
+        } catch { /* skip unsupported chars */ }
+      } else if (field.type === "qrcode") {
+        try {
+          const uidField = fields.find(f => f.id === "uid")
+          const uid = uidField?.text?.replace("UID: ", "") || "PQ-XXXX-XXXX"
+          const batchField = fields.find(f => f.id === "batch")
+          const batch = batchField?.text?.replace("BATCH: ", "") || "000"
+          const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
+          const qrData = field.id === "qrcode-2" ? `${baseUrl}/verify?batch=${batch}&code=${uid}` : `${baseUrl}/verify?code=${uid}`
+          const darkColor = field.id === "qrcode-2" ? "#333333" : "#1a3a7c"
+          const qrImg = await QRCode.toDataURL(qrData, { width: 300, margin: 1, color: { dark: darkColor, light: "#ffffff" } })
+          const qrImageBytes = Uint8Array.from(atob(qrImg.split(",")[1]), (c: string) => c.charCodeAt(0))
+          const qrImage = await pdfDoc.embedPng(qrImageBytes)
+          const qrW = (field.width || 150) * uniformScale
+          const qrH = (field.height || 150) * uniformScale
+          page.drawImage(qrImage, { x: fx, y: fy - qrH, width: qrW, height: qrH })
+        } catch { /* QR failed */ }
+      }
+    }
   }
 
   const exportEditorPDF = async () => {
@@ -469,39 +636,7 @@ export default function AdminLabelsPage() {
     page.drawRectangle({ x: labelLeft, y: labelTop - labelHeight, width: labelWidth, height: labelHeight,
       color: rgb(bgC.r, bgC.g, bgC.b), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
 
-    const sortedFields = [...currentTemplate.fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0)).filter(f => f.visible !== false)
-
-    for (const field of sortedFields) {
-      const fx = labelLeft + field.x * uniformScale
-      const fy = labelTop - field.y * uniformScale
-
-      if (field.type === "rect") {
-        const c = hexToRgb(field.fill || "#1a3a7c")
-        const rW = (field.width || 100) * uniformScale
-        const rH = (field.height || 40) * uniformScale
-        page.drawRectangle({ x: fx, y: fy - rH, width: rW, height: rH,
-          color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1 })
-      } else if (field.type === "text") {
-        const c = hexToRgb(field.fill || "#000000")
-        const fontSize = Math.max(4, (field.fontSize || 14) * uniformScale)
-        const useFont = field.fontWeight === "bold" ? boldFont : font
-        try {
-          page.drawText(field.text || "", { x: fx, y: fy - fontSize, size: fontSize, font: useFont, color: rgb(c.r, c.g, c.b), opacity: field.opacity ?? 1 })
-        } catch { /* skip unsupported chars */ }
-      } else if (field.type === "qrcode") {
-        try {
-          const uidField = currentTemplate.fields.find(f => f.id === "uid")
-          const uid = uidField?.text?.replace("UID: ", "") || "PQ-XXXX-XXXX"
-          const verifyUrl = `${window.location.origin}/verify?code=${uid}`
-          const qrImg = await QRCode.toDataURL(verifyUrl, { width: 300, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
-          const qrImageBytes = Uint8Array.from(atob(qrImg.split(",")[1]), (c: string) => c.charCodeAt(0))
-          const qrImage = await pdfDoc.embedPng(qrImageBytes)
-          const qrW = (field.width || 150) * uniformScale
-          const qrH = (field.height || 150) * uniformScale
-          page.drawImage(qrImage, { x: fx, y: fy - qrH, width: qrW, height: qrH })
-        } catch { /* QR failed */ }
-      }
-    }
+    await drawLabelOnPage(page, pdfDoc, currentTemplate.fields, currentTemplate.width, currentTemplate.height, labelLeft, labelTop, uniformScale, font, boldFont, rgb, QRCode, hexToRgb)
 
     const pdfBytes = await pdfDoc.save()
     const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" })
@@ -581,44 +716,36 @@ export default function AdminLabelsPage() {
     try {
       const { PDFDocument, rgb, StandardFonts } = await import("pdf-lib")
       const QRCode = (await import("qrcode")).default
-
       const pdfDoc = await PDFDocument.create()
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
       const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-      const allProducts = products.filter(p => p.active !== false)
+      const aspect = currentTemplate.width / currentTemplate.height
+      const pageWidth = 595
+      const pageHeight = 842
+      const margin = 20
+      const availW = pageWidth - margin * 2
+      const availH = pageHeight - margin * 2
+      let labelWidth: number, labelHeight: number
+      if (availW / aspect <= availH) { labelWidth = availW; labelHeight = availW / aspect }
+      else { labelHeight = availH; labelWidth = availH * aspect }
+      const uniformScale = labelWidth / currentTemplate.width
 
-      for (let i = 0; i < allProducts.length; i += 4) {
-        const page = pdfDoc.addPage([595, 842])
-        const batch = allProducts.slice(i, i + 4)
+      const codesToExport = generatedCodes.length > 0 ? generatedCodes : [currentTemplate.fields.find(f => f.id === "uid")?.text?.replace("UID: ", "") || "PHQ-PROD-00000000"]
 
-        for (let j = 0; j < batch.length; j++) {
-          const product = batch[j]
-          const x = 50 + (j % 2) * 260
-          const y = 750 - Math.floor(j / 2) * 380
+      for (const code of codesToExport) {
+        const page = pdfDoc.addPage([pageWidth, pageHeight])
+        const labelLeft = margin + (availW - labelWidth) / 2
+        const labelTop = pageHeight - margin
+        const bgC = hexToRgb(currentTemplate.bgColor || "#f8f8f8")
+        page.drawRectangle({ x: labelLeft, y: labelTop - labelHeight, width: labelWidth, height: labelHeight, color: rgb(bgC.r, bgC.g, bgC.b), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
 
-          page.drawRectangle({ x, y: y - 340, width: 240, height: 340, color: rgb(0.96, 0.96, 0.97), borderColor: rgb(0.1, 0.23, 0.49), borderWidth: 1.5 })
-          page.drawRectangle({ x, y: y - 20, width: 240, height: 20, color: rgb(0.1, 0.23, 0.49) })
-          page.drawRectangle({ x, y: y - 340, width: 240, height: 20, color: rgb(0.1, 0.23, 0.49) })
-          page.drawRectangle({ x, y: y - 318, width: 240, height: 6, color: rgb(0.96, 0.77, 0.09) })
-
-          page.drawText("PharmaQo Labs", { x: x + 15, y: y - 50, size: 14, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
-          page.drawText(product.name || "Product", { x: x + 15, y: y - 75, size: 12, font: boldFont, color: rgb(0.1, 0.1, 0.15) })
-          if (product.dosage) page.drawText(`Dosage: ${product.dosage}`, { x: x + 15, y: y - 100, size: 9, font, color: rgb(0.3, 0.3, 0.4) })
-          if (product.lot) page.drawText(`Lot: ${product.lot}`, { x: x + 15, y: y - 120, size: 8, font, color: rgb(0.4, 0.4, 0.5) })
-          if (product.expiry) page.drawText(`Exp: ${product.expiry}`, { x: x + 15, y: y - 138, size: 8, font, color: rgb(0.4, 0.4, 0.5) })
-
-          const uid = product.uid || "N/A"
-          page.drawText(`UID: ${uid.slice(0, 20)}`, { x: x + 15, y: y - 260, size: 7, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
-
-          try {
-            const verifyUrl = `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/verify?code=${uid}`
-            const qrPngUrl2 = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
-            const qrImageBytes = Uint8Array.from(atob(qrPngUrl2.split(",")[1]), c => c.charCodeAt(0))
-            const qrImage = await pdfDoc.embedPng(qrImageBytes)
-            page.drawImage(qrImage, { x: x + 140, y: y - 250, width: 80, height: 80 })
-          } catch { /* ignore */ }
-        }
+        const fieldsWithCode = currentTemplate.fields.map(f => {
+          if (f.id === "uid") return { ...f, text: `UID: ${code}` }
+          if (f.id === "auth-code") return { ...f, text: `Auth: ${code}` }
+          return f
+        })
+        await drawLabelOnPage(page, pdfDoc, fieldsWithCode, currentTemplate.width, currentTemplate.height, labelLeft, labelTop, uniformScale, font, boldFont, rgb, QRCode, hexToRgb)
       }
 
       const pdfBytes = await pdfDoc.save()
@@ -643,35 +770,39 @@ export default function AdminLabelsPage() {
       const QRCode = (await import("qrcode")).default
       const zip = new JSZip()
 
-      for (const product of products) {
+      const aspect = currentTemplate.width / currentTemplate.height
+      const pageWidth = 595
+      const pageHeight = 842
+      const margin = 20
+      const availW = pageWidth - margin * 2
+      const availH = pageHeight - margin * 2
+      let labelWidth: number, labelHeight: number
+      if (availW / aspect <= availH) { labelWidth = availW; labelHeight = availW / aspect }
+      else { labelHeight = availH; labelWidth = availH * aspect }
+      const uniformScale = labelWidth / currentTemplate.width
+
+      const codesToExport = generatedCodes.length > 0 ? generatedCodes : [currentTemplate.fields.find(f => f.id === "uid")?.text?.replace("UID: ", "") || "PHQ-PROD-00000000"]
+
+      for (let idx = 0; idx < codesToExport.length; idx++) {
+        const code = codesToExport[idx]
         const pdfDoc = await PDFDocument.create()
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
-        const page = pdfDoc.addPage([300, 200])
+        const page = pdfDoc.addPage([pageWidth, pageHeight])
+        const labelLeft = margin + (availW - labelWidth) / 2
+        const labelTop = pageHeight - margin
+        const bgC = hexToRgb(currentTemplate.bgColor || "#f8f8f8")
+        page.drawRectangle({ x: labelLeft, y: labelTop - labelHeight, width: labelWidth, height: labelHeight, color: rgb(bgC.r, bgC.g, bgC.b), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
 
-        page.drawRectangle({ x: 0, y: 0, width: 300, height: 200, color: rgb(0.96, 0.96, 0.97) })
-        page.drawRectangle({ x: 0, y: 180, width: 300, height: 20, color: rgb(0.1, 0.23, 0.49) })
-        page.drawRectangle({ x: 0, y: 0, width: 300, height: 20, color: rgb(0.1, 0.23, 0.49) })
-        page.drawRectangle({ x: 0, y: 18, width: 300, height: 5, color: rgb(0.96, 0.77, 0.09) })
-
-        page.drawText("PharmaQo Labs", { x: 10, y: 155, size: 10, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
-        page.drawText(product.name || "Product", { x: 10, y: 138, size: 9, font: boldFont, color: rgb(0.1, 0.1, 0.15) })
-        if (product.dosage) page.drawText(product.dosage, { x: 10, y: 122, size: 7, font, color: rgb(0.3, 0.3, 0.4) })
-
-        const uid = product.uid || "N/A"
-        page.drawText(`UID: ${uid.slice(0, 16)}`, { x: 10, y: 35, size: 6, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
-
-        try {
-          const verifyUrl = `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/verify?code=${uid}`
-          const qrPngUrl3 = await QRCode.toDataURL(verifyUrl, { width: 80, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
-          const qrImageBytes = Uint8Array.from(atob(qrPngUrl3.split(",")[1]), c => c.charCodeAt(0))
-          const qrImage = await pdfDoc.embedPng(qrImageBytes)
-          page.drawImage(qrImage, { x: 210, y: 50, width: 70, height: 70 })
-        } catch { /* ignore */ }
+        const fieldsWithCode = currentTemplate.fields.map(f => {
+          if (f.id === "uid") return { ...f, text: `UID: ${code}` }
+          if (f.id === "auth-code") return { ...f, text: `Auth: ${code}` }
+          return f
+        })
+        await drawLabelOnPage(page, pdfDoc, fieldsWithCode, currentTemplate.width, currentTemplate.height, labelLeft, labelTop, uniformScale, font, boldFont, rgb, QRCode, hexToRgb)
 
         const pdfBytes = await pdfDoc.save()
-        const slug = product.slug || product.name?.toLowerCase().replace(/\s+/g, "-") || "label"
-        zip.file(`${slug}.pdf`, pdfBytes)
+        zip.file(`etiqueta-${idx + 1}-${code}.pdf`, pdfBytes)
       }
 
       const content = await zip.generateAsync({ type: "blob" })
@@ -717,6 +848,9 @@ export default function AdminLabelsPage() {
             </button>
             <button onClick={addNewColorStrip} className="btn-secondary text-sm flex items-center gap-1" title="Adicionar Faixa">
               <Palette className="w-4 h-4" /> Nova Faixa
+            </button>
+            <button onClick={generateAndApplyCode} className="btn-secondary text-sm flex items-center gap-1" title="Gerar código de autenticidade único">
+              <Grid3X3 className="w-4 h-4" /> Gerar Código
             </button>
             <button onClick={() => setShowSaveDialog(true)} className="btn-secondary text-sm flex items-center gap-1">
               <Save className="w-4 h-4" /> Salvar Template
@@ -836,8 +970,8 @@ export default function AdminLabelsPage() {
                   {selectedField.type === "text" && (
                     <div>
                       <label className="text-xs text-pharma-text-muted block mb-1">Texto</label>
-                      <input type="text" value={selectedField.text || ""} onChange={e => updateField(selectedField.id, { text: e.target.value })}
-                        className="input-field text-sm" />
+                      <textarea value={selectedField.text || ""} onChange={e => updateField(selectedField.id, { text: e.target.value })}
+                        rows={2} className="input-field text-sm resize-none" />
                     </div>
                   )}
                   <div className="grid grid-cols-2 gap-2">
@@ -852,20 +986,25 @@ export default function AdminLabelsPage() {
                         className="input-field text-sm" />
                     </div>
                   </div>
-                  {(selectedField.type === "rect" || selectedField.type === "qrcode") && (
+                  {(selectedField.type === "rect" || selectedField.type === "qrcode" || selectedField.type === "text") && (
                     <>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-xs text-pharma-text-muted block mb-1">Largura</label>
-                          <input type="number" value={selectedField.width || 100} onChange={e => updateField(selectedField.id, { width: parseInt(e.target.value) || 100 })}
+                          <input type="number" value={selectedField.width || ""} placeholder="Auto"
+                            onChange={e => updateField(selectedField.id, { width: parseInt(e.target.value) || 0 })}
                             className="input-field text-sm" />
                         </div>
                         <div>
                           <label className="text-xs text-pharma-text-muted block mb-1">Altura</label>
-                          <input type="number" value={selectedField.height || 40} onChange={e => updateField(selectedField.id, { height: parseInt(e.target.value) || 40 })}
+                          <input type="number" value={selectedField.height || ""} placeholder="Auto"
+                            onChange={e => updateField(selectedField.id, { height: parseInt(e.target.value) || 0 })}
                             className="input-field text-sm" />
                         </div>
                       </div>
+                      {selectedField.type === "text" && (
+                        <p className="text-xs text-pharma-text-muted -mt-1">Defina largura para quebrar texto. Arraste as alças na tela.</p>
+                      )}
                       {selectedField.type === "rect" && (
                         <div>
                           <label className="text-xs text-pharma-text-muted block mb-1">Tipo de Faixa</label>
@@ -1025,6 +1164,17 @@ export default function AdminLabelsPage() {
                     </div>
                   </div>
                   <div className="border-t border-pharma-border pt-3">
+                    <label className="text-xs text-pharma-text-muted block mb-2">Códigos de Autenticidade</label>
+                    <div className="space-y-2">
+                      <button onClick={generateAndApplyCode} className="w-full btn-secondary text-xs flex items-center justify-center gap-1">
+                        <Grid3X3 className="w-3 h-3" /> Gerar 1 Código
+                      </button>
+                      <button onClick={() => { generateBulkCodes(codeCount); }} className="w-full btn-primary text-xs flex items-center justify-center gap-1">
+                        <Download className="w-3 h-3" /> Gerar {codeCount} Códigos em Massa
+                      </button>
+                    </div>
+                  </div>
+                  <div className="border-t border-pharma-border pt-3">
                     <p className="text-xs text-pharma-text-muted mb-2">Selecione um elemento na tela para editar suas propriedades.</p>
                   </div>
                 </>
@@ -1043,6 +1193,48 @@ export default function AdminLabelsPage() {
               <div className="flex justify-end gap-3">
                 <button onClick={() => setShowSaveDialog(false)} className="btn-secondary">Cancelar</button>
                 <button onClick={saveTemplate} className="btn-primary">Salvar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Codes Panel */}
+        {showCodesPanel && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="card max-w-lg w-full max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold">Códigos de Autenticidade</h2>
+                <button onClick={() => setShowCodesPanel(false)} className="p-1 rounded hover:bg-pharma-bg">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 mb-3">
+                <label className="text-xs text-pharma-text-muted">Quantidade:</label>
+                <input type="number" min="1" max="1000" value={codeCount} onChange={e => setCodeCount(parseInt(e.target.value) || 10)}
+                  className="input-field text-sm w-20" />
+                <button onClick={() => generateBulkCodes(codeCount)} className="btn-primary text-sm">
+                  Gerar {codeCount} Códigos
+                </button>
+                {generatedCodes.length > 0 && (
+                  <button onClick={exportCodesToCSV} className="btn-secondary text-sm flex items-center gap-1">
+                    <Download className="w-3 h-3" /> CSV
+                  </button>
+                )}
+              </div>
+              {generatedCodes.length > 0 && (
+                <p className="text-xs text-pharma-text-muted mb-2">{generatedCodes.length} códigos gerados. Clique para copiar.</p>
+              )}
+              <div className="overflow-y-auto flex-1 border border-pharma-border rounded-lg">
+                {generatedCodes.map((code, i) => (
+                  <div key={i} onClick={() => copyCodeToClipboard(code)}
+                    className="flex items-center justify-between px-3 py-1.5 text-xs font-mono hover:bg-pharma-purple/10 cursor-pointer border-b border-pharma-border/50 last:border-b-0">
+                    <span>{i + 1}. {code}</span>
+                    <button onClick={(e) => { e.stopPropagation(); updateField("uid", { text: `UID: ${code}` }); updateField("auth-code", { text: `Auth: ${code}` }) }}
+                      className="text-pharma-purple hover:underline text-xs">
+                      Aplicar
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
