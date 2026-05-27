@@ -230,7 +230,7 @@ export default function AdminLabelsPage() {
         switch (f.id) {
           case "product-name": return { ...f, text: product.name || "Anadrol" }
           case "subtitle": return { ...f, text: product.composition?.split(",")[0]?.trim() || product.subtitle || "Oxymetholone" }
-          case "category": return { ...f, text: product.category || "60Caps Orals" }
+          case "category": return { ...f, text: (typeof product.category === "object" ? product.category?.name : product.category) || "60Caps Orals" }
           case "dosage": return { ...f, text: product.dosage || "50mg x 60 Caps" }
           case "application": return { ...f, text: product.application || "FOR ORAL USE ONLY" }
           case "composition": return { ...f, text: product.composition ? `Each caps contains: ${product.composition}.\nKeep out of reach of children, Store below 30°C, Protect\nfrom light, Do not Refrigerate, Prescription only medicine` : f.text || "" }
