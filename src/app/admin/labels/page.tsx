@@ -230,7 +230,7 @@ export default function AdminLabelsPage() {
         switch (f.id) {
           case "product-name": return { ...f, text: product.name || "Anadrol" }
           case "subtitle": return { ...f, text: product.composition?.split(",")[0]?.trim() || product.subtitle || "Oxymetholone" }
-          case "category": return { ...f, text: product.category || "60Caps Orals" }
+          case "category": return { ...f, text: (typeof product.category === "object" ? product.category?.name : product.category) || "60Caps Orals" }
           case "dosage": return { ...f, text: product.dosage || "50mg x 60 Caps" }
           case "application": return { ...f, text: product.application || "FOR ORAL USE ONLY" }
           case "composition": return { ...f, text: product.composition ? `Each caps contains: ${product.composition}.\nKeep out of reach of children, Store below 30°C, Protect\nfrom light, Do not Refrigerate, Prescription only medicine` : f.text || "" }
@@ -559,6 +559,15 @@ export default function AdminLabelsPage() {
     return { r: parseInt(clean.slice(0, 2), 16) / 255, g: parseInt(clean.slice(2, 4), 16) / 255, b: parseInt(clean.slice(4, 6), 16) / 255 }
   }
 
+  const embedTemplateBackground = async (page: any, pdfDoc: any, labelLeft: number, labelTop: number, labelWidth: number, labelHeight: number) => {
+    try {
+      const resp = await fetch("/images/anadrol-template.png")
+      const imgBytes = new Uint8Array(await resp.arrayBuffer())
+      const bgImage = await pdfDoc.embedPng(imgBytes)
+      page.drawImage(bgImage, { x: labelLeft, y: labelTop - labelHeight, width: labelWidth, height: labelHeight })
+    } catch { /* template image not available */ }
+  }
+
   const drawLabelOnPage = async (page: any, pdfDoc: any, fields: LabelField[], templateWidth: number, templateHeight: number, labelLeft: number, labelTop: number, uniformScale: number, font: any, boldFont: any, rgb: any, QRCode: any, hexToRgbFn: (hex: string) => { r: number; g: number; b: number }) => {
     const sortedFields = [...fields].sort((a, b) => (a.layerOrder || 0) - (b.layerOrder || 0)).filter(f => f.visible !== false)
     for (const field of sortedFields) {
@@ -632,9 +641,7 @@ export default function AdminLabelsPage() {
     const labelTop = pageHeight - margin
 
     const page = pdfDoc.addPage([pageWidth, pageHeight])
-    const bgC = hexToRgb(currentTemplate.bgColor || "#f8f8f8")
-    page.drawRectangle({ x: labelLeft, y: labelTop - labelHeight, width: labelWidth, height: labelHeight,
-      color: rgb(bgC.r, bgC.g, bgC.b), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
+    await embedTemplateBackground(page, pdfDoc, labelLeft, labelTop, labelWidth, labelHeight)
 
     await drawLabelOnPage(page, pdfDoc, currentTemplate.fields, currentTemplate.width, currentTemplate.height, labelLeft, labelTop, uniformScale, font, boldFont, rgb, QRCode, hexToRgb)
 
@@ -657,47 +664,50 @@ export default function AdminLabelsPage() {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-    const labelsData = labels.filter(l => l.product)
+    let bgImage: any = null
+    try {
+      const resp = await fetch("/images/anadrol-template.png")
+      const imgBytes = new Uint8Array(await resp.arrayBuffer())
+      bgImage = await pdfDoc.embedPng(imgBytes)
+    } catch { /* template image not available */ }
 
-    for (let i = 0; i < labelsData.length; i += 4) {
-      const page = pdfDoc.addPage([595, 842])
-      const batch = labelsData.slice(i, i + 4)
+    const labelsData = labels.filter(l => l.product)
+    const labelW = 260
+    const labelH = 130
+    const cols = 2
+    const rows = 5
+    const pageWidth = 595
+    const pageHeight = 842
+    const marginX = (pageWidth - cols * labelW) / (cols + 1)
+    const marginY = (pageHeight - rows * labelH) / (rows + 1)
+
+    for (let i = 0; i < labelsData.length; i += cols * rows) {
+      const page = pdfDoc.addPage([pageWidth, pageHeight])
+      const batch = labelsData.slice(i, i + cols * rows)
 
       for (let j = 0; j < batch.length; j++) {
         const label = batch[j]
         const data = typeof label.data === "string" ? JSON.parse(label.data) : label.data
-        const x = 50 + (j % 2) * 260
-        const y = 750 - Math.floor(j / 2) * 380
+        const col = j % cols
+        const row = Math.floor(j / cols)
+        const x = marginX + col * (labelW + marginX)
+        const y = pageHeight - marginY - row * (labelH + marginY)
 
-        page.drawRectangle({ x, y: y - 340, width: 240, height: 340, color: rgb(0.96, 0.96, 0.97), borderColor: rgb(0.1, 0.23, 0.49), borderWidth: 1.5 })
-        page.drawRectangle({ x, y: y - 20, width: 240, height: 20, color: rgb(0.1, 0.23, 0.49) })
-        page.drawRectangle({ x, y: y - 340, width: 240, height: 20, color: rgb(0.1, 0.23, 0.49) })
-        page.drawRectangle({ x, y: y - 318, width: 240, height: 6, color: rgb(0.96, 0.77, 0.09) })
-
-        page.drawText("PharmaQo Labs", { x: x + 15, y: y - 50, size: 14, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
-        page.drawText(data.name || label.product.name, { x: x + 15, y: y - 75, size: 12, font: boldFont, color: rgb(0.1, 0.1, 0.15) })
-
-        if (data.dosage) page.drawText(`Dosage: ${data.dosage}`, { x: x + 15, y: y - 100, size: 9, font, color: rgb(0.3, 0.3, 0.4) })
-        if (data.lot) page.drawText(`Lot: ${data.lot}`, { x: x + 15, y: y - 120, size: 8, font, color: rgb(0.4, 0.4, 0.5) })
-        if (data.expiry) page.drawText(`Exp: ${data.expiry}`, { x: x + 15, y: y - 138, size: 8, font, color: rgb(0.4, 0.4, 0.5) })
-        if (data.composition) {
-          const comp = data.composition.length > 35 ? data.composition.slice(0, 35) + "..." : data.composition
-          page.drawText(`Comp: ${comp}`, { x: x + 15, y: y - 156, size: 7, font, color: rgb(0.4, 0.4, 0.5) })
+        if (bgImage) {
+          page.drawImage(bgImage, { x, y: y - labelH, width: labelW, height: labelH })
+        } else {
+          page.drawRectangle({ x, y: y - labelH, width: labelW, height: labelH, color: rgb(0.96, 0.96, 0.97), borderColor: rgb(0.1, 0.23, 0.49), borderWidth: 1 })
         }
 
         const uid = data.uid || label.product.uid
-        page.drawText(`UID: ${uid.slice(0, 20)}`, { x: x + 15, y: y - 260, size: 7, font: boldFont, color: rgb(0.1, 0.23, 0.49) })
-
         try {
           const verifyUrl = `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/verify?code=${uid}`
-          const qrPngUrl = await QRCode.toDataURL(verifyUrl, { width: 100, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
+          const qrPngUrl = await QRCode.toDataURL(verifyUrl, { width: 300, margin: 1, color: { dark: "#1a3a7c", light: "#ffffff" } })
           const qrImageBytes = Uint8Array.from(atob(qrPngUrl.split(",")[1]), c => c.charCodeAt(0))
           const qrImage = await pdfDoc.embedPng(qrImageBytes)
-          page.drawImage(qrImage, { x: x + 140, y: y - 250, width: 80, height: 80 })
+          const qrSize = labelH * 0.3
+          page.drawImage(qrImage, { x: x + labelW * 0.82 - qrSize / 2, y: y - labelH * 0.35 - qrSize / 2, width: qrSize, height: qrSize })
         } catch { /* QR generation failed */ }
-
-        page.drawText("Scan to verify", { x: x + 15, y: y - 280, size: 6, font, color: rgb(0.5, 0.5, 0.6) })
-        page.drawText("authenticity", { x: x + 15, y: y - 290, size: 6, font, color: rgb(0.5, 0.5, 0.6) })
       }
     }
 
@@ -737,8 +747,7 @@ export default function AdminLabelsPage() {
         const page = pdfDoc.addPage([pageWidth, pageHeight])
         const labelLeft = margin + (availW - labelWidth) / 2
         const labelTop = pageHeight - margin
-        const bgC = hexToRgb(currentTemplate.bgColor || "#f8f8f8")
-        page.drawRectangle({ x: labelLeft, y: labelTop - labelHeight, width: labelWidth, height: labelHeight, color: rgb(bgC.r, bgC.g, bgC.b), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
+        await embedTemplateBackground(page, pdfDoc, labelLeft, labelTop, labelWidth, labelHeight)
 
         const fieldsWithCode = currentTemplate.fields.map(f => {
           if (f.id === "uid") return { ...f, text: `UID: ${code}` }
@@ -791,8 +800,7 @@ export default function AdminLabelsPage() {
         const page = pdfDoc.addPage([pageWidth, pageHeight])
         const labelLeft = margin + (availW - labelWidth) / 2
         const labelTop = pageHeight - margin
-        const bgC = hexToRgb(currentTemplate.bgColor || "#f8f8f8")
-        page.drawRectangle({ x: labelLeft, y: labelTop - labelHeight, width: labelWidth, height: labelHeight, color: rgb(bgC.r, bgC.g, bgC.b), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
+        await embedTemplateBackground(page, pdfDoc, labelLeft, labelTop, labelWidth, labelHeight)
 
         const fieldsWithCode = currentTemplate.fields.map(f => {
           if (f.id === "uid") return { ...f, text: `UID: ${code}` }
