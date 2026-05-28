@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-pharma-bg text-pharma-text antialiased;
+  }
+  
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-pharma-bg;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-pharma-purple/40 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-pharma-purple/60;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-gradient-to-r from-pharma-purple to-pharma-purple-dark px-6 py-3 rounded-xl font-semibold
+    text-white transition-all duration-300 hover:shadow-glow hover:scale-[1.02] active:scale-95
+    disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+  .btn-secondary {
+    @apply border border-pharma-purple/50 px-6 py-3 rounded-xl font-semibold text-pharma-purple
+    transition-all duration-300 hover:bg-pharma-purple/10 hover:border-pharma-purple
+    active:scale-95;
+  }
+  .btn-ghost {
+    @apply px-4 py-2 rounded-lg text-pharma-text-muted transition-all duration-200
+    hover:bg-pharma-card hover:text-pharma-text;
+  }
+  .card {
+    @apply bg-pharma-card border border-pharma-border rounded-2xl p-6
+    transition-all duration-300;
+  }
+  .card-hover {
+    @apply card hover:border-pharma-purple/30 hover:shadow-glow-sm;
+  }
+  .input-field {
+    @apply w-full bg-pharma-bg border border-pharma-border rounded-xl px-4 py-3
+    text-pharma-text placeholder:text-pharma-text-muted/50
+    focus:outline-none focus:border-pharma-purple focus:ring-1 focus:ring-pharma-purple/30
+    transition-all duration-200;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider;
+  }
+  .badge-novo { @apply bg-emerald-500/20 text-emerald-400; }
+  .badge-mais-vendido { @apply bg-amber-500/20 text-amber-400; }
+  .badge-combo { @apply bg-blue-500/20 text-blue-400; }
+  .badge-oferta { @apply bg-red-500/20 text-red-400; }
+  .badge-lancamento { @apply bg-purple-500/20 text-purple-400; }
+  .badge-limitado { @apply bg-orange-500/20 text-orange-400; }
+  
+  .glow-text {
+    @apply text-pharma-purple;
+    text-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+  }
+  .glow-border {
+    @apply border-pharma-purple/50;
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.15), inset 0 0 15px rgba(139, 92, 246, 0.05);
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-pharma-purple via-pharma-accent to-pharma-purple-light bg-clip-text text-transparent;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+.animate-float { animation: float 3s ease-in-out infinite; }
